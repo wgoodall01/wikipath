@@ -72,7 +72,7 @@ var startCmd = cli.Command{
 
 		// Index all the articles.
 		fmt.Print("Making index... ")
-		ind.MakeIndex()
+		ind.Build()
 		fmt.Print("[done]\n")
 
 		spew.Dump(ind.Get("A"))
