@@ -1,46 +1,110 @@
 package main
 
 import (
+	_ "github.com/davecgh/go-spew/spew"
 	"testing"
 )
 
 var A = &Article{Title: "A", Text: "[[B]] [[C]]"}
 var B = &Article{Title: "B", Text: "[[C]] [[D]]"}
-var C = &Article{Title: "C", Text: "[[B]]"}
+var C = &Article{Title: "C", Text: "[[B]] [[E]]"}
 var D = &Article{Title: "D", Text: ""}
+var E = &Article{Title: "E", Redirect: Redirect{Title: "B"}}
 
-func TestIndex(t *testing.T) {
-	index := NewIndex()
-
-	ready0, dirty0 := index.Status()
-	t.Logf("Created index. ready:%t dirty:%t", ready0, dirty0)
-
-	for _, article := range []*Article{A, B, C, D} {
-		index.AddArticle(article)
+func testRedirect(t *testing.T, index *Index) {
+	redir := index.Get("E")
+	if redir.Title != "B" {
+		t.Fatal("Redirecting: index.Get(\"E\") should return B, returned", redir.Title)
 	}
+}
 
-	ready1, dirty1 := index.Status()
-	t.Logf("Loaded articles. ready:%t dirty:%t", ready1, dirty1)
-
-	index.Build()
-
-	ready2, dirty2 := index.Status()
-	t.Logf("Built index. ready:%t dirty:%t", ready2, dirty2)
-
-	if index.Get("A").Article != A {
-		t.Logf("index.Get() didn't return right article.")
+func testGet(t *testing.T, index *Index) {
+	title := index.Get("B").Title
+	if title != "B" {
+		t.Fatal("index.Get(\"B\") returned", title)
 	}
+}
 
-	test := index.FindPath(index.Get("A"), index.Get("D"), 20)
-
-	ready3, dirty3 := index.Status()
-	t.Logf("Paths found. ready:%t dirty:%t", ready3, dirty3)
-
-	for _, path := range test {
+func printPaths(t *testing.T, paths [][]*IndexItem) {
+	for _, path := range paths {
 		str := ""
 		for _, item := range path {
 			str = str + item.Title + ", "
 		}
 		t.Log("Path: " + str)
 	}
+}
+
+func TestIndex(t *testing.T) {
+	index := NewIndex()
+
+	t.Run("Status0", func(t *testing.T) {
+		ready, dirty := index.Status()
+		if ready != false {
+			t.Fatal("Reports ready before Build() is called")
+		}
+		if dirty != false {
+			t.Fatal("Reports dirty before FindPath() is called")
+		}
+	})
+
+	t.Run("AddArticles", func(t *testing.T) {
+		for _, article := range []*Article{A, B, C, D, E} {
+			index.AddArticle(article)
+		}
+	})
+
+	t.Run("Status1", func(t *testing.T) {
+		ready, dirty := index.Status()
+		if ready != false {
+			t.Fatal("Reports ready before Build() is called")
+		}
+		if dirty != false {
+			t.Fatal("Reports dirty before FindPath() is called")
+		}
+	})
+
+	t.Run("AccessPreBuild", func(t *testing.T) {
+		testRedirect(t, index)
+		testGet(t, index)
+	})
+
+	t.Run("Build", func(t *testing.T) {
+		index.Build()
+	})
+
+	t.Run("Status2", func(t *testing.T) {
+		ready, dirty := index.Status()
+		if ready != true {
+			t.Fatal("Reports not ready after Build() is called")
+		}
+		if dirty != false {
+			t.Fatal("Reports dirty before FindPath() is called")
+		}
+	})
+
+	t.Run("AccessPostBuild", func(t *testing.T) {
+		testGet(t, index)
+		testRedirect(t, index)
+	})
+
+	t.Run("PathFind1", func(t *testing.T) {
+		paths := index.FindPath(index.Get("A"), index.Get("D"), 20)
+		printPaths(t, paths)
+	})
+
+	t.Run("Status3", func(t *testing.T) {
+		ready, dirty := index.Status()
+		if ready != true {
+			t.Fatal("Reports Not ready after Build() is called")
+		}
+		if dirty != true {
+			t.Fatal("Reports not dirty after pathfind")
+		}
+	})
+
+	t.Run("PathFind2", func(t *testing.T) {
+		paths := index.FindPath(index.Get("B"), index.Get("D"), 20)
+		printPaths(t, paths)
+	})
 }

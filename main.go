@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/urfave/cli"
 	"os"
+	"time"
 )
+
+func NewFileError(msg string) *cli.ExitError {
+	return cli.NewExitError(msg, 1)
+}
 
 var listCmd = cli.Command{
 	Name:  "list",
@@ -21,7 +25,7 @@ var listCmd = cli.Command{
 		path := c.String("file")
 		archiveFile, fileErr := os.Open(path)
 		if fileErr != nil {
-			return fileErr
+			return NewFileError("Could not open wiki")
 		}
 
 		// Article visitor
@@ -53,29 +57,47 @@ var startCmd = cli.Command{
 	Action: func(c *cli.Context) error {
 		// Open the archive
 		fmt.Print("Opening archive... ")
+		tOpen := time.Now()
 		path := c.String("file")
 		archiveFile, fileErr := os.Open(path)
 		if fileErr != nil {
-			return fileErr
+			return NewFileError("Could not open wiki")
 		}
-		fmt.Print("[done]\n")
+		dOpen := time.Since(tOpen).Seconds()
+		fmt.Printf("[done in %.2fs]\n", dOpen)
 
 		// Load all the articles.
 		fmt.Print("Loading articles... ")
+		tLoad := time.Now()
 		ind := NewIndex()
 		visitor := func(a Article) error {
 			ind.AddArticle(&a)
 			return nil
 		}
 		ParseWikiXML(archiveFile, visitor)
-		fmt.Print("[done]\n")
+		dLoad := time.Since(tLoad).Seconds()
+		fmt.Printf("[done in %.2fs]\n", dLoad)
 
 		// Index all the articles.
 		fmt.Print("Making index... ")
+		tBuild := time.Now()
 		ind.Build()
-		fmt.Print("[done]\n")
+		dBuild := time.Since(tBuild).Seconds()
+		fmt.Printf("[done in %.2fs]\n", dBuild)
 
-		spew.Dump(ind.Get("A"))
+		// Find a path.
+		fmt.Print("Finding from 'Potato' -> 'Cyan'...")
+		tFind := time.Now()
+		paths := ind.FindPath(ind.Get("Potato"), ind.Get("Cyan"), 3)
+		dFind := time.Since(tFind).Seconds()
+		fmt.Printf("[done in %.2fs]", dFind)
+
+		for _, path := range paths {
+			for _, item := range path {
+				fmt.Print(item.Title + ", ")
+			}
+			fmt.Println()
+		}
 
 		return nil
 	},

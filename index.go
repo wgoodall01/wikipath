@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 func NormalizeArticleTitle(title string) string {
 	// Just lowercase it for now -- there are other normalization rules though.
@@ -8,15 +11,16 @@ func NormalizeArticleTitle(title string) string {
 }
 
 type Index struct {
-	itemIndex map[string]*IndexItem // Map of normalized article title to `Item`s.
-	dirty     bool                  // If the items have been modified
-	ready     bool                  // If the index has been built
+	itemIndex     map[string]*IndexItem // Map of normalized article title to `Item`s.
+	linkIndex     map[string][]string   // [nil if ready] Map of norm. titles to their normalized links.
+	redirectIndex map[string]string     // [nil if ready] Map of norm. titles to norm. titles representing redirects.
+	dirty         bool                  // If the items have been modified
+	ready         bool                  // If the index has been built
 }
 
 type IndexItem struct {
-	Title     string       // Title of the page.
+	Title     string       // Non-normalized title of the page.
 	FoundPath *IndexPath   // If this item has been visited before.
-	Article   *Article     // Pointer to that Item's article.
 	Links     []*IndexItem // Pointers to other items, representing the links on the page.
 }
 
@@ -68,12 +72,15 @@ func (path *IndexPath) PathsTo(to *IndexItem, depth int8) []*IndexPath {
 	return validPaths
 }
 
-func NewIndex() Index {
-	return Index{
-		itemIndex: make(map[string]*IndexItem),
+func NewIndex() *Index {
+	return &Index{
+		itemIndex:     make(map[string]*IndexItem),
+		linkIndex:     make(map[string][]string),
+		redirectIndex: make(map[string]string),
 	}
 }
 
+// Get a list of paths between two IndexItems, sorted by length.
 func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int8) [][]*IndexItem {
 	// Ensure index is clean.
 	if ind.dirty {
@@ -101,6 +108,11 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int8) [][]*Inde
 		pathList[i] = path
 	}
 
+	// Sort paths by length.
+	sort.Slice(pathList, func(i int, j int) bool {
+		return len(pathList[i]) < len(pathList[j])
+	})
+
 	return pathList
 }
 
@@ -114,24 +126,51 @@ func (ind *Index) Reset() {
 }
 
 func (ind *Index) AddArticle(a *Article) {
-	// Add it to the article index.
+	// Index these things:
+	// - make an IndexItem, add it to the itemIndex
+	// - Parse the links from the article text, add it to the linkIndex
+	// - Figure out redirects, add them to the redirectIndex.
+
 	k := NormalizeArticleTitle(a.Title)
-	ind.itemIndex[k] = &IndexItem{Title: a.Title, Article: a}
+	ind.itemIndex[k] = &IndexItem{Title: a.Title}
+	ind.linkIndex[k] = ParseLinks(a.Text)
+
+	if a.Redirect.Title != "" {
+		ind.redirectIndex[k] = NormalizeArticleTitle(a.Redirect.Title)
+	}
+
 	ind.ready = false
 }
 
 func (ind *Index) Build() {
 	if !ind.ready {
-		for _, item := range ind.itemIndex {
-			// Create an 'Item' for it, add that to the index.
-			articleLinks := ParseLinks(item.Article.Text)
-			item.Links = make([]*IndexItem, len(articleLinks))
+		for k, item := range ind.itemIndex {
+			redir := ind.redirectIndex[k]
+			if redir != "" {
+				// Item is a redirect, add pointer to next article.
+				ind.itemIndex[k] = ind.itemIndex[redir]
+			} else {
+				articleLinks := ind.linkIndex[k]
+				item.Links = make([]*IndexItem, 0, len(articleLinks))
 
-			for i, link := range articleLinks {
-				item.Links[i] = ind.itemIndex[NormalizeArticleTitle(link)]
+				for _, linkName := range articleLinks {
+					linkItem := ind.Get(linkName)
+
+					// Check for broken links. Wikipedia isn't perfect.
+					if linkItem != nil {
+						item.Links = append(item.Links, linkItem)
+					}
+				}
 			}
 		}
 	}
+
+	// Remove link, redirect indexes, they're unneeded.
+	// Redirects are now built in to the itemIndex
+	ind.redirectIndex = nil
+	ind.linkIndex = nil
+
+	// Index is now ready.
 	ind.ready = true
 }
 
@@ -140,7 +179,17 @@ func (ind *Index) Status() (ready bool, dirty bool) {
 	return ind.ready, ind.dirty
 }
 
+// Get an IndexItem by article title.
+// Follows any and all redirects.
 func (ind *Index) Get(title string) *IndexItem {
 	k := NormalizeArticleTitle(title)
-	return ind.itemIndex[k]
+	redir := ind.redirectIndex[k] // Get a redirect
+	if redir != "" {
+		// Follow ONE redirect to an article.
+		// Wikipedia doesn't allow for >1 redirect, so there can't be loops.
+		return ind.itemIndex[redir]
+	} else {
+		// Return the item from the index
+		return ind.itemIndex[k]
+	}
 }
