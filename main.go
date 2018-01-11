@@ -64,7 +64,7 @@ var startCmd = cli.Command{
 		fmt.Print("Loading articles... ")
 		ind := NewIndex()
 		visitor := func(a Article) error {
-			ind.AddArticle(a)
+			ind.AddArticle(&a)
 			return nil
 		}
 		ParseWikiXML(archiveFile, visitor)
