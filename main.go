@@ -29,7 +29,7 @@ var listCmd = cli.Command{
 		}
 
 		// Article visitor
-		callback := func(a Article) error {
+		callback := func(a *Article) error {
 			fmt.Printf("%10d%3d%30s%10s\n", a.Id, a.Namespace, a.Title, a.RevisionAuthor)
 			links := ParseLinks(a.Text)
 			for _, link := range links {
@@ -40,7 +40,7 @@ var listCmd = cli.Command{
 		}
 
 		// Parse the archive
-		parseErr := ParseWikiXML(archiveFile, callback)
+		parseErr := LoadWiki(archiveFile, callback)
 		return parseErr
 	},
 }
@@ -70,11 +70,7 @@ var startCmd = cli.Command{
 		fmt.Print("Loading articles... ")
 		tLoad := time.Now()
 		ind := NewIndex()
-		visitor := func(a Article) error {
-			ind.AddArticle(&a)
-			return nil
-		}
-		ParseWikiXML(archiveFile, visitor)
+		LoadWikiToIndex(archiveFile, ind)
 		dLoad := time.Since(tLoad).Seconds()
 		fmt.Printf("[done in %.2fs]\n", dLoad)
 
@@ -106,19 +102,6 @@ var startCmd = cli.Command{
 			}
 			fmt.Println()
 			ind.Reset()
-		}
-
-		fmt.Print("Finding from 'Potato' -> 'Cyan'...")
-		tFind := time.Now()
-		paths := ind.FindPath(ind.Get("Potato"), ind.Get("Cyan"), 3)
-		dFind := time.Since(tFind).Seconds()
-		fmt.Printf("[done in %.2fs]", dFind)
-
-		for _, path := range paths {
-			for _, item := range path {
-				fmt.Print(item.Title + ", ")
-			}
-			fmt.Println()
 		}
 
 		return nil

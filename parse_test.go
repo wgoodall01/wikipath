@@ -1,10 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
+
+var archivePath = flag.String("archivePath", "./wikis/simple.xml", "Path to the wiki dump, as an .xml file.")
 
 func assertEqual(t *testing.T, a interface{}, b interface{}) {
 	if a != b {
@@ -42,7 +46,7 @@ const testXml = `
 func TestGetAnArticle(t *testing.T) {
 	xmlReader := strings.NewReader(testXml)
 
-	cb := func(a Article) error {
+	cb := func(a *Article) error {
 		assertEqual(t, a.Title, "Abrahamic religion")
 		assertEqual(t, a.Redirect.Title, "Testing redirect title")
 		assertEqual(t, a.Text, "This is some [[example]] text.")
@@ -50,7 +54,7 @@ func TestGetAnArticle(t *testing.T) {
 		return nil
 	}
 
-	ParseWikiXML(xmlReader, cb)
+	LoadWiki(xmlReader, cb)
 
 	t.Log("Done.")
 }
@@ -77,4 +81,45 @@ func TestParseLinks(t *testing.T) {
 	assertEqual(t, links[5], "War and Peace")
 	assertEqual(t, links[6], "Cilk")
 	assertEqual(t, links[7], "C (programming language)")
+}
+
+func checkError(b *testing.B, err error) {
+	if err != nil {
+		b.Fatal(err.Error())
+	}
+}
+
+func BenchmarkLoadXML(b *testing.B) {
+
+	b.Run("LoadSync", func(b *testing.B) {
+		archiveFile, fileErr := os.Open(*archivePath)
+		checkError(b, fileErr)
+
+		ind := NewIndex()
+		LoadWiki(archiveFile, func(a *Article) error {
+			ind.AddArticle(a)
+			return nil
+		})
+	})
+
+	b.Run("LoadAsync", func(b *testing.B) {
+		archiveFile, fileErr := os.Open(*archivePath)
+		checkError(b, fileErr)
+		ind := NewIndex()
+
+		loadChan := make(chan *Article, 100)
+
+		go func() {
+			LoadWiki(archiveFile, func(a *Article) error {
+				loadChan <- a
+				return nil
+			})
+			close(loadChan)
+		}()
+
+		for a := range loadChan {
+			ind.AddArticle(a)
+		}
+
+	})
 }

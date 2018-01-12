@@ -23,7 +23,26 @@ type Article struct {
 	RevisionAuthorId  string   `xml:"revision>contributor>id"`
 }
 
-func ParseWikiXML(source io.Reader, visitor func(Article) error) error {
+func LoadWikiToIndex(source io.Reader, ind *Index) {
+	// Does this in parallel. It's roughly 30% faster.
+
+	loadChan := make(chan *Article, 100)
+
+	go func() {
+		LoadWiki(source, func(a *Article) error {
+			loadChan <- a
+			return nil
+		})
+		close(loadChan)
+	}()
+
+	for a := range loadChan {
+		ind.AddArticle(a)
+	}
+
+}
+
+func LoadWiki(source io.Reader, visitor func(*Article) error) error {
 	// Open an XML decoder over the file.
 	decoder := xml.NewDecoder(source)
 
@@ -43,7 +62,7 @@ func ParseWikiXML(source io.Reader, visitor func(Article) error) error {
 			if se.Name.Local == "page" {
 				var a Article
 				decoder.DecodeElement(&a, &se)
-				visitor(a)
+				visitor(&a)
 			}
 		}
 	}
