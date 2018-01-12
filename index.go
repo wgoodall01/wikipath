@@ -118,8 +118,8 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int8) [][]*Inde
 
 func (ind *Index) Reset() {
 	if ind.dirty && ind.ready {
-		for _, it := range ind.itemIndex {
-			it.FoundPath = nil
+		for k, _ := range ind.itemIndex {
+			ind.itemIndex[k].FoundPath = nil
 		}
 		ind.dirty = false
 	}
@@ -130,7 +130,6 @@ func (ind *Index) AddArticle(a *Article) {
 	// - make an IndexItem, add it to the itemIndex
 	// - Parse the links from the article text, add it to the linkIndex
 	// - Figure out redirects, add them to the redirectIndex.
-
 	k := NormalizeArticleTitle(a.Title)
 	ind.itemIndex[k] = &IndexItem{Title: a.Title}
 	ind.linkIndex[k] = ParseLinks(a.Text)
@@ -148,7 +147,16 @@ func (ind *Index) Build() {
 			redir := ind.redirectIndex[k]
 			if redir != "" {
 				// Item is a redirect, add pointer to next article.
-				ind.itemIndex[k] = ind.itemIndex[redir]
+				redirItem, ok := ind.itemIndex[redir]
+
+				if ok {
+					ind.itemIndex[k] = redirItem
+				} else {
+					// Broken redirect to non-existent article.
+					// Delete both articles from the index.
+					delete(ind.itemIndex, k)     // this article
+					delete(ind.itemIndex, redir) // the one it points to
+				}
 			} else {
 				articleLinks := ind.linkIndex[k]
 				item.Links = make([]*IndexItem, 0, len(articleLinks))
