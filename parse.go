@@ -62,7 +62,11 @@ func LoadWiki(source io.Reader, visitor func(*Article) error) error {
 			if se.Name.Local == "page" {
 				var a Article
 				decoder.DecodeElement(&a, &se)
-				visitor(&a)
+
+				err := visitor(&a)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
