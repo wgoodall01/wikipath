@@ -86,6 +86,28 @@ var startCmd = cli.Command{
 		fmt.Printf("[done in %.2fs]\n", dBuild)
 
 		// Find a path.
+		running := true
+		for running {
+			fmt.Print("\n\n")
+			var articleA string
+			var articleB string
+
+			fmt.Print("First Article  : ")
+			fmt.Scanln(&articleA)
+
+			fmt.Print("Second Article : ")
+			fmt.Scanln(&articleB)
+
+			fmt.Printf("Searching for path from %s -> %s...\n\n", articleA, articleB)
+
+			paths := ind.FindPath(ind.Get(articleA), ind.Get(articleB), 4)
+			for _, item := range paths[0] {
+				fmt.Print(item.Title + ",")
+			}
+			fmt.Println()
+			ind.Reset()
+		}
+
 		fmt.Print("Finding from 'Potato' -> 'Cyan'...")
 		tFind := time.Now()
 		paths := ind.FindPath(ind.Get("Potato"), ind.Get("Cyan"), 3)
