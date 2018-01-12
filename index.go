@@ -47,7 +47,7 @@ func (path *IndexPath) Append(it *IndexItem) *IndexPath {
 }
 
 // Returns a list of valid `IndexPath`s from `path` to `to`.
-func (path *IndexPath) PathsTo(to *IndexItem, depth int8) []*IndexPath {
+func (path *IndexPath) PathsTo(to *IndexItem, depth int) []*IndexPath {
 	validPaths := make([]*IndexPath, 0)
 	if depth > 0 {
 		for _, link := range path.Item.Links {
@@ -81,7 +81,7 @@ func NewIndex() *Index {
 }
 
 // Get a list of paths between two IndexItems, sorted by length.
-func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int8) [][]*IndexItem {
+func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) [][]*IndexItem {
 	// Ensure index is clean.
 	if ind.dirty {
 		ind.Reset()
@@ -131,11 +131,14 @@ func (ind *Index) AddArticle(a *Article) {
 	// - Parse the links from the article text, add it to the linkIndex
 	// - Figure out redirects, add them to the redirectIndex.
 	k := NormalizeArticleTitle(a.Title)
-	ind.itemIndex[k] = &IndexItem{Title: a.Title}
-	ind.linkIndex[k] = ParseLinks(a.Text)
 
 	if a.Redirect.Title != "" {
+		// Item is a redirect, don't add it to the index.
 		ind.redirectIndex[k] = NormalizeArticleTitle(a.Redirect.Title)
+	} else {
+		// Item is normal, index it.
+		ind.itemIndex[k] = &IndexItem{Title: a.Title}
+		ind.linkIndex[k] = ParseLinks(a.Text)
 	}
 
 	ind.ready = false
@@ -143,34 +146,31 @@ func (ind *Index) AddArticle(a *Article) {
 
 func (ind *Index) Build() {
 	if !ind.ready {
+		// Go over indexed items
 		for k, item := range ind.itemIndex {
-			redir := ind.redirectIndex[k]
-			if redir != "" {
-				// Item is a redirect, add pointer to next article.
-				redirItem, ok := ind.itemIndex[redir]
+			articleLinks := ind.linkIndex[k]
+			item.Links = make([]*IndexItem, 0, len(articleLinks))
 
-				if ok {
-					ind.itemIndex[k] = redirItem
-				} else {
-					// Broken redirect to non-existent article.
-					// Delete both articles from the index.
-					delete(ind.itemIndex, k)     // this article
-					delete(ind.itemIndex, redir) // the one it points to
-				}
-			} else {
-				articleLinks := ind.linkIndex[k]
-				item.Links = make([]*IndexItem, 0, len(articleLinks))
+			for _, linkName := range articleLinks {
+				linkItem := ind.Get(linkName)
 
-				for _, linkName := range articleLinks {
-					linkItem := ind.Get(linkName)
-
-					// Check for broken links. Wikipedia isn't perfect.
-					if linkItem != nil {
-						item.Links = append(item.Links, linkItem)
-					}
+				// Check for broken links. Wikipedia isn't perfect.
+				if linkItem != nil {
+					item.Links = append(item.Links, linkItem)
 				}
 			}
 		}
+
+		// Go over indexed redirects
+		for k, redir := range ind.redirectIndex {
+			redirItem, ok := ind.itemIndex[redir]
+
+			// Only add link if item isn't a broken redirect
+			if ok {
+				ind.itemIndex[k] = redirItem
+			}
+		}
+
 	}
 
 	// Remove link, redirect indexes, they're unneeded.
