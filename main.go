@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/urfave/cli"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -120,6 +121,11 @@ var startCmd = cli.Command{
 		ind.Build()
 		dBuild := time.Since(tBuild).Seconds()
 		fmt.Printf("[done in %4.2fs]\n", dBuild)
+
+		// Run a GC
+		fmt.Printf("Running GC...      ")
+		runtime.GC()
+		fmt.Printf("[done]\n")
 
 		// Find a path.
 	InputLoop:
