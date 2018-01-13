@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -125,8 +127,9 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadBzippedSync", func(b *testing.B) {
-		bzipFile, fileErr := os.Open(*bzipPath)
+		bzipRaw, fileErr := os.Open(*bzipPath)
 		checkError(b, fileErr)
+		bzipFile := bufio.NewReader(bzipRaw)
 		archiveStream := bzip2.NewReader(bzipFile)
 
 		ind := NewIndex()
@@ -158,10 +161,8 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadBzippedAsync", func(b *testing.B) {
-		//chanSize := 1
-		//bufSize := 100000 // 100kb
-
-		//ind := NewIndex()
+		chanSize := 64         // Buffers inbetween all channels
+		readerBufSize := 10000 // File buffers in front of OS
 
 		parseIndexLine := func(line string) (int64, uint, string) {
 			line = strings.TrimSpace(line)
@@ -181,13 +182,14 @@ func BenchmarkLoadXML(b *testing.B) {
 
 		loadIndexChunks := func(indexPath string, stop *bool) <-chan [2]int64 {
 			// Create the chunk channel
-			chunks := make(chan [2]int64)
+			chunks := make(chan [2]int64, chanSize)
 
 			go func() {
 				// Open a decompressing reader on indexPath
 				indexRaw, indexErr := os.Open(indexPath)
 				checkError(b, indexErr)
-				indexReader := bzip2.NewReader(indexRaw)
+				indexBuf := bufio.NewReaderSize(indexRaw, readerBufSize)
+				indexReader := bzip2.NewReader(indexBuf)
 				indexScanner := bufio.NewScanner(indexReader)
 
 				// Load the first line, get the first offset
@@ -211,44 +213,61 @@ func BenchmarkLoadXML(b *testing.B) {
 			return chunks
 		}
 
-		decompressSections := func(archivePath string, chunks <-chan [2]int64) io.Reader {
-			rArchive, wArchive := io.Pipe()
-			archiveFile, archiveErr := os.Open(archivePath)
-			checkError(b, archiveErr)
+		decompressSections := func(archivePath string, chunks <-chan [2]int64) <-chan *Article {
+			articles := make(chan *Article, chanSize)
 
 			go func() {
 				for chunk := range chunks {
-					chunkReader := io.NewSectionReader(archiveFile, chunk[0], chunk[1]-chunk[0])
+					archiveFile, archiveErr := os.Open(archivePath)
+					checkError(b, archiveErr)
+					chunkRaw := io.NewSectionReader(archiveFile, chunk[0], chunk[1]-chunk[0])
+					chunkReader := bufio.NewReaderSize(chunkRaw, readerBufSize)
 					chunkDecompressor := bzip2.NewReader(chunkReader)
-					io.Copy(wArchive, chunkDecompressor)
+					LoadWiki(chunkDecompressor, func(a *Article) error {
+						articles <- a
+						return nil
+					})
 				}
-				wArchive.Close()
-			}()
-
-			return rArchive
-		}
-
-		parseArchive := func(source io.Reader) <-chan *Article {
-			articles := make(chan *Article)
-
-			go func() {
-				LoadWiki(source, func(a *Article) error {
-					articles <- a
-					return nil
-				})
 				close(articles)
 			}()
 
 			return articles
 		}
 
+		mergeArticles := func(chans ...<-chan *Article) <-chan *Article {
+			var wg sync.WaitGroup
+			out := make(chan *Article, chanSize)
+
+			wg.Add(len(chans))
+			for _, ch := range chans {
+				go func() {
+					for a := range ch {
+						out <- a
+					}
+					wg.Done()
+				}()
+			}
+
+			go func() {
+				wg.Wait()
+				close(out)
+			}()
+
+			return out
+
+		}
+
 		stop := false
 		ind := NewIndex()
 		chunks := loadIndexChunks(*bzipIndexPath, &stop)
-		archiveReader := decompressSections(*bzipPath, chunks)
-		articles := parseArchive(archiveReader)
 
-		for a := range articles {
+		nWorkers := runtime.GOMAXPROCS(0)
+		articleChans := make([]<-chan *Article, nWorkers)
+		for i := 0; i < nWorkers; i++ {
+			articleChans[i] = decompressSections(*bzipPath, chunks)
+		}
+
+		for a := range mergeArticles(articleChans...) {
 			ind.AddArticle(a)
 		}
 

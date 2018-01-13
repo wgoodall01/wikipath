@@ -3,3 +3,4 @@ wikipath
 full_test_wiki.xml
 vendor/
 .DS_Store
+*.prof
