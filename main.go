@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"github.com/urfave/cli"
 	"os"
@@ -27,8 +26,12 @@ var findCmd = cli.Command{
 	Usage: "Find articles from the archive.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  "file, f",
-			Usage: "Wiki archive XML file",
+			Name:  "archive, a",
+			Usage: "Wiki archive *multistream.xml.bz2 file",
+		},
+		cli.StringFlag{
+			Name:  "index, i",
+			Usage: "Wiki *-multistream-index.txt.bz2 file",
 		},
 	},
 	Action: func(c *cli.Context) error {
@@ -45,7 +48,7 @@ var findCmd = cli.Command{
 			articleNames[i] = NormalizeArticleTitle(arg)
 		}
 
-		callback := func(a *Article) error {
+		callback := func(a *Article) {
 			for i, name := range articleNames {
 				if NormalizeArticleTitle(a.Title) == name {
 
@@ -70,19 +73,17 @@ var findCmd = cli.Command{
 
 					if i == len(articleNames)-1 {
 						fmt.Println("Done searching")
-						return errors.New("Done searching.")
 					} else {
-						return nil
+						//TODO: error handling?
 					}
 
 				}
 			}
-			return nil
 		}
 
 		// Parse the archive
-		parseErr := LoadWiki(archiveFile, callback)
-		return parseErr
+		LoadWiki(archiveFile, callback)
+		return nil
 	},
 }
 
@@ -91,27 +92,35 @@ var startCmd = cli.Command{
 	Usage: "Start interactive mode",
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  "file, f",
-			Usage: "Path to archive XML file",
+			Name:  "archive, a",
+			Usage: "Wiki archive *multistream.xml.bz2 file",
+		},
+		cli.StringFlag{
+			Name:  "index, i",
+			Usage: "Wiki *-multistream-index.txt.bz2 file",
 		},
 	},
 	Action: func(c *cli.Context) error {
-		// Open the archive
+		// Open the archive and index
 		fmt.Print("Opening archive...  ")
-		tOpen := time.Now()
-		path := c.String("file")
-		archiveFile, fileErr := os.Open(path)
+		archiveFile, fileErr := os.Open(c.String("archive"))
 		if fileErr != nil {
-			return NewFileError("Could not open wiki")
+			return NewFileError("Could not open archive.")
 		}
-		dOpen := time.Since(tOpen).Seconds()
-		fmt.Printf("[done in %4.2fs]\n", dOpen)
+		fmt.Print("[done]\n")
+
+		fmt.Print("Opening index...    ")
+		indexFile, indexErr := os.Open(c.String("index"))
+		if indexErr != nil {
+			return NewFileError("Could not open index.")
+		}
+		fmt.Print("[done]\n")
 
 		// Load all the articles.
 		fmt.Print("Loading articles... ")
 		tLoad := time.Now()
 		ind := NewIndex()
-		LoadWikiToIndex(archiveFile, ind)
+		LoadWikiCompressed(indexFile, archiveFile, ind.AddArticle)
 		dLoad := time.Since(tLoad).Seconds()
 		fmt.Printf("[done in %4.2fs]\n", dLoad)
 
@@ -123,7 +132,7 @@ var startCmd = cli.Command{
 		fmt.Printf("[done in %4.2fs]\n", dBuild)
 
 		// Run a GC
-		fmt.Printf("Running GC...      ")
+		fmt.Print("Running GC...       ")
 		runtime.GC()
 		fmt.Printf("[done]\n")
 

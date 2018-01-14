@@ -3,15 +3,10 @@ package main
 import (
 	"bufio"
 	"compress/bzip2"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
-	"runtime"
-	"strconv"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -28,9 +23,9 @@ func TestIndexedGzip(t *testing.T) {
 
 	bzipFile, _ := os.Open(archivePath)
 	archiveReader := bzip2.NewReader(bzipFile)
-	LoadWiki(archiveReader, func(a *Article) error {
+	LoadWiki(archiveReader, func(a *Article) {
 		t.Logf("Article: %s", a.Title)
-		return errors.New("")
+		bzipFile.Close() //TODO: error handling
 	})
 }
 
@@ -70,12 +65,11 @@ const testXml = `
 func TestGetAnArticle(t *testing.T) {
 	xmlReader := strings.NewReader(testXml)
 
-	cb := func(a *Article) error {
+	cb := func(a *Article) {
 		assertEqual(t, a.Title, "Abrahamic religion")
 		assertEqual(t, a.Redirect.Title, "Testing redirect title")
 		assertEqual(t, a.Text, "This is some [[example]] text.")
 		assertEqual(t, a.Namespace, 0)
-		return nil
 	}
 
 	LoadWiki(xmlReader, cb)
@@ -120,9 +114,8 @@ func BenchmarkLoadXML(b *testing.B) {
 		checkError(b, fileErr)
 
 		ind := NewIndex()
-		LoadWiki(archiveFile, func(a *Article) error {
+		LoadWiki(archiveFile, func(a *Article) {
 			ind.AddArticle(a)
-			return nil
 		})
 	})
 
@@ -133,9 +126,8 @@ func BenchmarkLoadXML(b *testing.B) {
 		archiveStream := bzip2.NewReader(bzipFile)
 
 		ind := NewIndex()
-		LoadWiki(archiveStream, func(a *Article) error {
+		LoadWiki(archiveStream, func(a *Article) {
 			ind.AddArticle(a)
-			return nil
 		})
 	})
 
@@ -147,9 +139,8 @@ func BenchmarkLoadXML(b *testing.B) {
 		loadChan := make(chan *Article, 100)
 
 		go func() {
-			LoadWiki(archiveFile, func(a *Article) error {
+			LoadWiki(archiveFile, func(a *Article) {
 				loadChan <- a
-				return nil
 			})
 			close(loadChan)
 		}()
@@ -161,97 +152,19 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadBzippedAsync", func(b *testing.B) {
-		chanSize := 1024       // Buffers inbetween all channels
-		readerBufSize := 50000 // File buffers in front of OS
+		index, idxErr := os.Open(*bzipIndexPath)
+		archive, archiveErr := os.Open(*bzipPath)
+		checkError(b, idxErr)
+		checkError(b, archiveErr)
 
-		parseIndexLine := func(line string) (int64, uint, string) {
-			line = strings.TrimSpace(line)
-			parts := strings.SplitN(line, ":", 3)
+		n := 0
+		LoadWikiCompressed(index, archive, func(a *Article) {
+			n++
+		})
 
-			offset, err0 := strconv.ParseInt(parts[0], 10, 64)
-			checkError(b, err0)
-
-			id64, err1 := strconv.ParseUint(parts[1], 10, 0)
-			checkError(b, err1)
-			id := uint(id64)
-
-			name := parts[2]
-
-			return offset, id, name
+		if n < 100000 {
+			b.Fatal("Did not load all articles, loaded", n)
 		}
-
-		loadIndexChunks := func(indexPath string, stop *bool) <-chan [2]int64 {
-			// Create the chunk channel
-			chunks := make(chan [2]int64, chanSize)
-
-			go func() {
-				// Open a decompressing reader on indexPath
-				indexRaw, indexErr := os.Open(indexPath)
-				checkError(b, indexErr)
-				indexBuf := bufio.NewReaderSize(indexRaw, readerBufSize)
-				indexReader := bzip2.NewReader(indexBuf)
-				indexScanner := bufio.NewScanner(indexReader)
-
-				// Load the first line, get the first offset
-				var offset int64 = 0
-
-				for indexScanner.Scan() {
-					line := indexScanner.Text()
-					chunk, _, _ := parseIndexLine(line)
-					if chunk > offset {
-						if *stop {
-							return
-						} else {
-							chunks <- [2]int64{offset, chunk}
-							offset = chunk
-						}
-					}
-				}
-				close(chunks)
-			}()
-
-			return chunks
-		}
-
-		decompressSections := func(wg *sync.WaitGroup, archivePath string, chunks <-chan [2]int64, articles chan<- *Article) {
-			go func() {
-				for chunk := range chunks {
-					archiveFile, archiveErr := os.Open(archivePath)
-					checkError(b, archiveErr)
-					chunkRaw := io.NewSectionReader(archiveFile, chunk[0], chunk[1]-chunk[0])
-					chunkReader := bufio.NewReaderSize(chunkRaw, readerBufSize)
-					chunkDecompressor := bzip2.NewReader(chunkReader)
-					LoadWiki(chunkDecompressor, func(a *Article) error {
-						articles <- a
-						return nil
-					})
-				}
-				wg.Done()
-			}()
-		}
-
-		stop := false
-		ind := NewIndex()
-		chunks := loadIndexChunks(*bzipIndexPath, &stop)
-
-		nWorkers := runtime.GOMAXPROCS(4)
-		articles := make(chan *Article, chanSize)
-		var wg sync.WaitGroup
-		wg.Add(nWorkers)
-		for i := 0; i < nWorkers; i++ {
-			decompressSections(&wg, *bzipPath, chunks, articles)
-		}
-
-		go func() {
-			wg.Wait()
-			close(articles)
-		}()
-
-		for a := range articles {
-			ind.AddArticle(a)
-		}
-
-		stop = true
 
 	})
 
