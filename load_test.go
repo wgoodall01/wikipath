@@ -161,8 +161,8 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadBzippedAsync", func(b *testing.B) {
-		chanSize := 64         // Buffers inbetween all channels
-		readerBufSize := 10000 // File buffers in front of OS
+		chanSize := 1024       // Buffers inbetween all channels
+		readerBufSize := 50000 // File buffers in front of OS
 
 		parseIndexLine := func(line string) (int64, uint, string) {
 			line = strings.TrimSpace(line)
@@ -213,9 +213,7 @@ func BenchmarkLoadXML(b *testing.B) {
 			return chunks
 		}
 
-		decompressSections := func(archivePath string, chunks <-chan [2]int64) <-chan *Article {
-			articles := make(chan *Article, chanSize)
-
+		decompressSections := func(wg *sync.WaitGroup, archivePath string, chunks <-chan [2]int64, articles chan<- *Article) {
 			go func() {
 				for chunk := range chunks {
 					archiveFile, archiveErr := os.Open(archivePath)
@@ -228,46 +226,28 @@ func BenchmarkLoadXML(b *testing.B) {
 						return nil
 					})
 				}
-				close(articles)
+				wg.Done()
 			}()
-
-			return articles
-		}
-
-		mergeArticles := func(chans ...<-chan *Article) <-chan *Article {
-			var wg sync.WaitGroup
-			out := make(chan *Article, chanSize)
-
-			wg.Add(len(chans))
-			for _, ch := range chans {
-				go func() {
-					for a := range ch {
-						out <- a
-					}
-					wg.Done()
-				}()
-			}
-
-			go func() {
-				wg.Wait()
-				close(out)
-			}()
-
-			return out
-
 		}
 
 		stop := false
 		ind := NewIndex()
 		chunks := loadIndexChunks(*bzipIndexPath, &stop)
 
-		nWorkers := runtime.GOMAXPROCS(0)
-		articleChans := make([]<-chan *Article, nWorkers)
+		nWorkers := runtime.GOMAXPROCS(4)
+		articles := make(chan *Article, chanSize)
+		var wg sync.WaitGroup
+		wg.Add(nWorkers)
 		for i := 0; i < nWorkers; i++ {
-			articleChans[i] = decompressSections(*bzipPath, chunks)
+			decompressSections(&wg, *bzipPath, chunks, articles)
 		}
 
-		for a := range mergeArticles(articleChans...) {
+		go func() {
+			wg.Wait()
+			close(articles)
+		}()
+
+		for a := range articles {
 			ind.AddArticle(a)
 		}
 
