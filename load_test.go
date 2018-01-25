@@ -15,20 +15,6 @@ var bzipPath = flag.String("bzipPath", "./wikis/simple.xml.bz2", "Path to the wi
 var indexPath = flag.String("indexPath", "./wikis/simple-index.txt", "Path to the index, as a .txt")
 var bzipIndexPath = flag.String("bzipIndexPath", "./wikis/simple-index.txt.bz2", "Path to the index, as a .txt.bz2")
 
-func TestIndexedGzip(t *testing.T) {
-	archivePath := "./wikis/simple.xml.bz2"
-	//indexPath := "./wikis/simple-index.txt.bz2"
-
-	t.Log("Testing indexed bzip loading...")
-
-	bzipFile, _ := os.Open(archivePath)
-	archiveReader := bzip2.NewReader(bzipFile)
-	LoadWiki(archiveReader, func(a *Article) {
-		t.Logf("Article: %s", a.Title)
-		bzipFile.Close() //TODO: error handling
-	})
-}
-
 func assertEqual(t *testing.T, a interface{}, b interface{}) {
 	if a != b {
 		msg := fmt.Sprintf("%v != %v", a, b)
@@ -65,11 +51,12 @@ const testXml = `
 func TestGetAnArticle(t *testing.T) {
 	xmlReader := strings.NewReader(testXml)
 
-	cb := func(a *Article) {
+	cb := func(a *Article) bool {
 		assertEqual(t, a.Title, "Abrahamic religion")
 		assertEqual(t, a.Redirect.Title, "Testing redirect title")
 		assertEqual(t, a.Text, "This is some [[example]] text.")
 		assertEqual(t, a.Namespace, 0)
+		return true
 	}
 
 	LoadWiki(xmlReader, cb)
@@ -114,8 +101,9 @@ func BenchmarkLoadXML(b *testing.B) {
 		checkError(b, fileErr)
 
 		ind := NewIndex()
-		LoadWiki(archiveFile, func(a *Article) {
+		LoadWiki(archiveFile, func(a *Article) bool {
 			ind.AddArticle(a)
+			return true
 		})
 	})
 
@@ -126,8 +114,9 @@ func BenchmarkLoadXML(b *testing.B) {
 		archiveStream := bzip2.NewReader(bzipFile)
 
 		ind := NewIndex()
-		LoadWiki(archiveStream, func(a *Article) {
+		LoadWiki(archiveStream, func(a *Article) bool {
 			ind.AddArticle(a)
+			return true
 		})
 	})
 
@@ -139,8 +128,9 @@ func BenchmarkLoadXML(b *testing.B) {
 		loadChan := make(chan *Article, 100)
 
 		go func() {
-			LoadWiki(archiveFile, func(a *Article) {
+			LoadWiki(archiveFile, func(a *Article) bool {
 				loadChan <- a
+				return true
 			})
 			close(loadChan)
 		}()
@@ -158,8 +148,9 @@ func BenchmarkLoadXML(b *testing.B) {
 		checkError(b, archiveErr)
 
 		n := 0
-		LoadWikiCompressed(index, archive, func(a *Article) {
+		LoadWikiCompressed(index, archive, func(a *Article) bool {
 			n++
+			return true
 		})
 
 		if n < 100000 {

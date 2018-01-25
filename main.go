@@ -48,7 +48,7 @@ var findCmd = cli.Command{
 			articleNames[i] = NormalizeArticleTitle(arg)
 		}
 
-		callback := func(a *Article) {
+		callback := func(a *Article) bool {
 			for i, name := range articleNames {
 				if NormalizeArticleTitle(a.Title) == name {
 
@@ -72,13 +72,15 @@ var findCmd = cli.Command{
 					articleNames[i] = ""
 
 					if i == len(articleNames)-1 {
-						fmt.Println("Done searching")
+						return false
 					} else {
-						//TODO: error handling?
+						return true
 					}
 
 				}
 			}
+
+			return true
 		}
 
 		// Parse the archive
@@ -120,7 +122,10 @@ var startCmd = cli.Command{
 		fmt.Print("Loading articles... ")
 		tLoad := time.Now()
 		ind := NewIndex()
-		LoadWikiCompressed(indexFile, archiveFile, ind.AddArticle)
+		LoadWikiCompressed(indexFile, archiveFile, func(a *Article) bool {
+			ind.AddArticle(a)
+			return true
+		})
 		dLoad := time.Since(tLoad).Seconds()
 		fmt.Printf("[done in %4.2fs]\n", dLoad)
 
