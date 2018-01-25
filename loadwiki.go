@@ -30,8 +30,6 @@ type Article struct {
 	RevisionAuthorId  string   `xml:"revision>contributor>id"`
 }
 
-var StoppedErr error = errors.New("Visitor stopped reading.")
-
 func LoadWikiToIndex(source io.Reader, ind *Index) {
 	// Does this in parallel. It's roughly 30% faster.
 
@@ -54,98 +52,39 @@ func LoadWikiToIndex(source io.Reader, ind *Index) {
 const chanSize int = 1024       // Buffers inbetween all channels
 const readerBufSize int = 50000 // File buffers in front of OS
 
-type loadContext struct {
-	wg       sync.WaitGroup
-	Canceled chan struct{}
-
-	Err    error
-	errMut sync.Mutex
-
-	latest int
-}
-
-func newLoadContext() *loadContext {
-	lc := &loadContext{Canceled: make(chan struct{})}
-	return lc
-}
-
-// Add(n) adds n workers to the loadContext.
-func (lc *loadContext) Add(n int) {
-	lc.wg.Add(n)
-	lc.latest = lc.latest + n
-}
-
-// Start() adds a worker and returns an ID for it.
-func (lc *loadContext) Start() int {
-	lc.wg.Add(1)
-
-	lc.latest++
-	return lc.latest
-}
-
-// Done() marks a worker as done.
-func (lc *loadContext) Done() {
-	lc.wg.Done()
-}
-
-func (lc *loadContext) Cancel(err error) {
-	lc.errMut.Lock()
-	select {
-	case <-lc.Canceled:
-		// Do nothing, already canceled.
-	default:
-		// Not yet canceled.
-		lc.Err = err
-		close(lc.Canceled) // cancel the context.
-	}
-	lc.errMut.Unlock()
-}
-
-func (lc *loadContext) Wait() error {
-	success := make(chan struct{})
-
-	go func() {
-		lc.wg.Wait()
-		close(success)
-	}()
-
-	select {
-	case <-success:
-		return nil
-	case <-lc.Canceled:
-		return lc.Err
-	}
-}
-
 func LoadWikiCompressed(index io.Reader, source io.ReaderAt, visitor func(*Article) bool) error {
-	lc := newLoadContext()
+	ec := NewErrorContext()
 
-	chunks := loadIndexChunks(lc, index)
+	chunks := loadIndexChunks(ec, index)
 	articles := make(chan *Article, chanSize)
 
 	nWorkers := runtime.GOMAXPROCS(4)
 
 	for i := 0; i < nWorkers; i++ {
-		decompressChunks(lc, source, chunks, articles)
+		decompressChunks(ec, source, chunks, articles)
 	}
 
+	var done sync.WaitGroup
 	go func() {
+		done.Add(1)
 		for a := range articles {
 			shouldCont := visitor(a)
 
 			if !shouldCont {
-				lc.Cancel(StoppedErr)
+				ec.Cancel(StoppedErr)
 			}
 		}
+		done.Done()
 	}()
 
-	err := lc.Wait()
+	ec.Wait()
 	close(articles)
-	return err
+	done.Wait()
+	return ec.Err
 }
 
-func decompressChunks(lc *loadContext, archiveFile io.ReaderAt, chunks <-chan [2]int64, articles chan<- *Article) {
-	lc.Start()
+func decompressChunks(ec *ErrorContext, archiveFile io.ReaderAt, chunks <-chan [2]int64, articles chan<- *Article) {
+	ec.Start()
 	go func() {
 		for chunk := range chunks {
 			chunkRaw := io.NewSectionReader(archiveFile, chunk[0], chunk[1]-chunk[0])
@@ -153,7 +92,7 @@ func decompressChunks(lc *loadContext, archiveFile io.ReaderAt, chunks <-chan [2
 			chunkDecompressor := bzip2.NewReader(chunkReader)
 			loadErr := LoadWiki(chunkDecompressor, func(a *Article) bool {
 				select {
-				case <-lc.Canceled:
+				case <-ec.Canceled:
 					// Load has been canceled
 					return false
 				default:
@@ -164,15 +103,15 @@ func decompressChunks(lc *loadContext, archiveFile io.ReaderAt, chunks <-chan [2
 			})
 
 			if loadErr != nil {
-				lc.Cancel(loadErr)
+				ec.Cancel(loadErr)
 				return
 			}
 		}
-		lc.Done()
+		ec.Done()
 	}()
 }
 
-func loadIndexChunks(lc *loadContext, indexRaw io.Reader) <-chan [2]int64 {
+func loadIndexChunks(ec *ErrorContext, indexRaw io.Reader) <-chan [2]int64 {
 	chunks := make(chan [2]int64, chanSize)
 
 	// Open a decompressing reader on indexPath
@@ -188,7 +127,7 @@ func loadIndexChunks(lc *loadContext, indexRaw io.Reader) <-chan [2]int64 {
 			line := indexScanner.Text()
 			chunk, _, _, parseErr := ParseIndexLine(line)
 			if parseErr != nil {
-				lc.Cancel(parseErr)
+				ec.Cancel(parseErr)
 				return
 			}
 			if chunk > offset {
@@ -201,7 +140,7 @@ func loadIndexChunks(lc *loadContext, indexRaw io.Reader) <-chan [2]int64 {
 
 		err := indexScanner.Err()
 		if err != nil {
-			lc.Cancel(err)
+			ec.Cancel(err)
 			return
 		}
 	}()

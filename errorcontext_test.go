@@ -7,7 +7,7 @@ import (
 
 func TestLoadContext(t *testing.T) {
 	t.Run("NoErrors", func(t *testing.T) {
-		lc := newLoadContext()
+		lc := NewErrorContext()
 
 		lc.Add(2)
 		lc.Done()
@@ -22,7 +22,7 @@ func TestLoadContext(t *testing.T) {
 	})
 
 	t.Run("OneError", func(t *testing.T) {
-		lc := newLoadContext()
+		lc := NewErrorContext()
 
 		lc.Add(256)
 		lc.Cancel(errors.New("Some error or something"))
@@ -36,7 +36,7 @@ func TestLoadContext(t *testing.T) {
 	})
 
 	t.Run("SeveralErrors", func(t *testing.T) {
-		lc := newLoadContext()
+		lc := NewErrorContext()
 
 		err1 := errors.New("The first err")
 		err2 := errors.New("The second err")
@@ -53,7 +53,7 @@ func TestLoadContext(t *testing.T) {
 	})
 
 	t.Run("CancelingWork", func(t *testing.T) {
-		lc := newLoadContext()
+		lc := NewErrorContext()
 		lc.Add(2)
 
 		// Before it's canceled, lc.Canceled is open
