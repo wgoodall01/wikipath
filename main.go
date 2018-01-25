@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
 	"fmt"
 	"github.com/urfave/cli"
 	"os"
@@ -21,9 +22,14 @@ func prompt(prompt string) string {
 	return strings.TrimSpace(valRaw)
 }
 
-var findCmd = cli.Command{
-	Name:  "find",
-	Usage: "Find articles from the archive.",
+type StrippedArticle struct {
+	Title string
+	Links []string
+}
+
+var indexCmd = cli.Command{
+	Name:  "index",
+	Usage: "Build an intermediate index of articles.",
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "archive, a",
@@ -33,58 +39,80 @@ var findCmd = cli.Command{
 			Name:  "index, i",
 			Usage: "Wiki *-multistream-index.txt.bz2 file",
 		},
+		cli.StringFlag{
+			Name:  "out, o",
+			Usage: "The output .wpindex file",
+		},
 	},
 	Action: func(c *cli.Context) error {
-		// Open the archive file
-		path := c.String("file")
-		archiveFile, fileErr := os.Open(path)
+		// Open the archive and index
+		fmt.Print("Opening archive...  ")
+		archiveFile, fileErr := os.Open(c.String("archive"))
 		if fileErr != nil {
-			return NewFileError("Could not open wiki")
+			return NewFileError("Could not open archive.")
 		}
+		fmt.Print("[done]\n")
 
-		// Articles to get
-		articleNames := make([]string, len(c.Args()))
-		for i, arg := range c.Args() {
-			articleNames[i] = NormalizeArticleTitle(arg)
+		fmt.Print("Opening index...    ")
+		indexFile, indexErr := os.Open(c.String("index"))
+		if indexErr != nil {
+			return NewFileError("Could not open index.")
 		}
+		fmt.Print("[done]\n")
 
-		callback := func(a *Article) bool {
-			for i, name := range articleNames {
-				if NormalizeArticleTitle(a.Title) == name {
+		fmt.Print("Opening output...   ")
+		outFile, outErr := os.Create(c.String("out"))
+		if outErr != nil {
+			return NewFileError("Could not open output file.")
+		}
+		fmt.Print("[done]\n")
 
-					fmt.Printf("%20s : %-50s\n", "Article Title", a.Title)
-					fmt.Printf("%20s : %-50s\n", "Redirect", a.Redirect.Title)
-					fmt.Printf("%20s : %-50d\n", "ID", a.Id)
-					fmt.Printf("%20s : %-50d\n", "Namespace", a.Namespace)
-					fmt.Printf("%20s : %-50s\n", "Timestamp", a.RevisionTimestamp)
-					fmt.Printf("%20s : %-50s\n", "Author", a.RevisionAuthor)
+		// Set up gob writer
+		encoder := gob.NewEncoder(outFile)
 
-					fmt.Printf("Text ::\n\n")
-					fmt.Println(a.Text)
-					fmt.Println("\n::\n\n")
+		tStart := time.Now()
 
-					fmt.Printf("Links ::\n")
-					for _, link := range ParseLinks(a.Text) {
-						fmt.Print(link + ", ")
-					}
-					fmt.Println("::\n")
+		fmt.Print("Saving wpindex...   ")
 
-					articleNames[i] = ""
+		ticker := make(chan string)
 
-					if i == len(articleNames)-1 {
-						return false
-					} else {
-						return true
-					}
+		go func() {
+			n := 0
+			for title := range ticker {
+				n++
+				if n%500 == 0 {
+					status := fmt.Sprintf(
+						"\rSaving wpindex...   [article:%d  title:'%s']%s",
+						n, title, strings.Repeat(" ", 100),
+					)[:100]
 
+					fmt.Printf(status)
 				}
 			}
+			fmt.Print("\r", strings.Repeat(" ", 100))
+		}()
 
+		loadErr := LoadWikiCompressed(indexFile, archiveFile, func(a *Article) bool {
+			if a.Redirect.Title != "" {
+				// Do nothing if it's a redirect
+			} else {
+				// Item is normal, save it.
+				sa := StrippedArticle{Title: a.Title, Links: ParseLinks(a.Text)}
+				ticker <- sa.Title
+				encoder.Encode(&sa)
+			}
 			return true
+		})
+
+		close(ticker)
+
+		if loadErr != nil {
+			return cli.NewExitError("Error: Failed to read from file", 10)
 		}
 
-		// Parse the archive
-		LoadWiki(archiveFile, callback)
+		dLoad := time.Since(tStart).Seconds()
+		fmt.Printf("\rSaving wpindex...   [done in %4.2fs]\n", dLoad)
+
 		return nil
 	},
 }
@@ -193,7 +221,7 @@ func main() {
 	app.HelpName = app.Name
 	app.Usage = "Find a path of links between two wiki pages."
 
-	app.Commands = []cli.Command{findCmd, startCmd}
+	app.Commands = []cli.Command{indexCmd, startCmd}
 
 	app.Run(os.Args)
 }
