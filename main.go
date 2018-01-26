@@ -21,6 +21,13 @@ func prompt(prompt string) string {
 	return strings.TrimSpace(valRaw)
 }
 
+func cliTicker(prompt string, tick string) {
+	width := 100
+	status := prompt + tick + strings.Repeat(" ", width)
+	status = status[:width] + "\r"
+	fmt.Print(status)
+}
+
 var indexCmd = cli.Command{
 	Name:  "index",
 	Usage: "Build an intermediate index of articles.",
@@ -63,8 +70,6 @@ var indexCmd = cli.Command{
 
 		tStart := time.Now()
 
-		fmt.Print("Saving wpindex...   ")
-
 		// Set up wpindex writer, channel for articles
 		writer := NewWpindexWriter(outFile)
 		articles := make(chan *StrippedArticle, 512)
@@ -72,19 +77,14 @@ var indexCmd = cli.Command{
 		ec.Start()
 		go func() {
 			n := 0
+
 			for sa := range articles {
 				n++
 				if n%500 == 0 {
-					status := fmt.Sprintf(
-						"\rSaving wpindex...   [article:%d  title:'%s']%s\r",
-						n, sa.Title, strings.Repeat(" ", 100),
-					)[:100]
-
-					fmt.Printf(status)
+					cliTicker("Saving wpindex...   ", fmt.Sprintf("[article:%d  title:'%s']", n, sa.Title))
 				}
 				writer.WriteArticle(sa)
 			}
-			fmt.Print("\r", strings.Repeat(" ", 100), "\r")
 
 			closeErr := writer.Close()
 			if closeErr != nil {
@@ -116,7 +116,8 @@ var indexCmd = cli.Command{
 		}
 
 		dLoad := time.Since(tStart).Seconds()
-		fmt.Printf("\rSaving wpindex...   [done in %4.2fs]\n", dLoad)
+		cliTicker("Saving wpindex...   ", fmt.Sprintf("[done in %4.2fs]", dLoad))
+		fmt.Println()
 
 		return nil
 	},
@@ -146,6 +147,8 @@ var startCmd = cli.Command{
 			return NewFileError("Could not understand index.")
 		}
 
+		cliTicker("Loading wpindex...  ", "")
+
 		// Load all the articles.
 		tLoad := time.Now()
 		ind := NewIndex()
@@ -157,17 +160,11 @@ var startCmd = cli.Command{
 			n := 0
 			for sa := range articles {
 				n++
-				if n%10000 == 0 {
-					status := fmt.Sprintf(
-						"\rLoading wpindex...  [article:%d  title:'%s']%s\r",
-						n, sa.Title, strings.Repeat(" ", 100),
-					)[:100]
-
-					fmt.Printf(status)
+				if n%500 == 0 {
+					cliTicker("Loading wpindex...  ", fmt.Sprintf("[article:%d  title: %s]", n, sa.Title))
 				}
 				ind.AddArticle(sa)
 			}
-			fmt.Print("\r", strings.Repeat(" ", 100), "\r")
 			ec.Done()
 		}()
 
@@ -194,8 +191,8 @@ var startCmd = cli.Command{
 		}
 
 		dLoad := time.Since(tLoad).Seconds()
-		fmt.Print("Loading wpindex...  ")
-		fmt.Printf("[done in %4.2fs]\n", dLoad)
+		cliTicker("Loading wpindex...  ", fmt.Sprintf("[done in %4.2fs]", dLoad))
+		fmt.Println()
 
 		// Index all the articles.
 		fmt.Print("Making index...     ")
