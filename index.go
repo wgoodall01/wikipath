@@ -125,20 +125,20 @@ func (ind *Index) Reset() {
 	}
 }
 
-func (ind *Index) AddArticle(a *Article) {
+func (ind *Index) AddArticle(a *StrippedArticle) {
 	// Index these things:
 	// - make an IndexItem, add it to the itemIndex
 	// - Parse the links from the article text, add it to the linkIndex
 	// - Figure out redirects, add them to the redirectIndex.
 	k := NormalizeArticleTitle(a.Title)
 
-	if a.Redirect.Title != "" {
+	if a.Redirect != "" {
 		// Item is a redirect, don't add it to the index.
-		ind.redirectIndex[k] = NormalizeArticleTitle(a.Redirect.Title)
+		ind.redirectIndex[k] = NormalizeArticleTitle(a.Redirect)
 	} else {
 		// Item is normal, index it.
 		ind.itemIndex[k] = &IndexItem{Title: a.Title}
-		ind.linkIndex[k] = ParseLinks(a.Text)
+		ind.linkIndex[k] = a.Links
 	}
 
 	ind.ready = false

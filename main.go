@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/gob"
 	"fmt"
 	"github.com/urfave/cli"
 	"os"
@@ -20,11 +19,6 @@ func prompt(prompt string) string {
 	fmt.Printf("%-15s: ", prompt)
 	valRaw, _ := in.ReadString('\n')
 	return strings.TrimSpace(valRaw)
-}
-
-type StrippedArticle struct {
-	Title string
-	Links []string
 }
 
 var indexCmd = cli.Command{
@@ -67,29 +61,36 @@ var indexCmd = cli.Command{
 		}
 		fmt.Print("[done]\n")
 
-		// Set up gob writer
-		encoder := gob.NewEncoder(outFile)
-
 		tStart := time.Now()
 
 		fmt.Print("Saving wpindex...   ")
 
-		ticker := make(chan string)
-
+		// Set up wpindex writer, channel for articles
+		writer := NewWpindexWriter(outFile)
+		articles := make(chan *StrippedArticle, 512)
+		ec := NewErrorContext()
+		ec.Start()
 		go func() {
 			n := 0
-			for title := range ticker {
+			for sa := range articles {
 				n++
 				if n%500 == 0 {
 					status := fmt.Sprintf(
-						"\rSaving wpindex...   [article:%d  title:'%s']%s",
-						n, title, strings.Repeat(" ", 100),
+						"\rSaving wpindex...   [article:%d  title:'%s']%s\r",
+						n, sa.Title, strings.Repeat(" ", 100),
 					)[:100]
 
 					fmt.Printf(status)
 				}
+				writer.WriteArticle(sa)
 			}
-			fmt.Print("\r", strings.Repeat(" ", 100))
+			fmt.Print("\r", strings.Repeat(" ", 100), "\r")
+
+			closeErr := writer.Close()
+			if closeErr != nil {
+				ec.Cancel(closeErr)
+			}
+			ec.Done()
 		}()
 
 		loadErr := LoadWikiCompressed(indexFile, archiveFile, func(a *Article) bool {
@@ -98,16 +99,20 @@ var indexCmd = cli.Command{
 			} else {
 				// Item is normal, save it.
 				sa := StrippedArticle{Title: a.Title, Links: ParseLinks(a.Text)}
-				ticker <- sa.Title
-				encoder.Encode(&sa)
+				articles <- &sa
 			}
 			return true
 		})
 
-		close(ticker)
-
 		if loadErr != nil {
 			return cli.NewExitError("Error: Failed to read from file", 10)
+		}
+
+		close(articles)
+
+		writerErr := ec.Wait()
+		if writerErr != nil {
+			return cli.NewExitError("Error: "+writerErr.Error(), 18)
 		}
 
 		dLoad := time.Since(tStart).Seconds()
@@ -122,39 +127,74 @@ var startCmd = cli.Command{
 	Usage: "Start interactive mode",
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:  "archive, a",
-			Usage: "Wiki archive *multistream.xml.bz2 file",
-		},
-		cli.StringFlag{
-			Name:  "index, i",
-			Usage: "Wiki *-multistream-index.txt.bz2 file",
+			Name:  "wpindex, i",
+			Usage: "Previously-built *.wpindex file",
 		},
 	},
 	Action: func(c *cli.Context) error {
-		// Open the archive and index
-		fmt.Print("Opening archive...  ")
-		archiveFile, fileErr := os.Open(c.String("archive"))
-		if fileErr != nil {
-			return NewFileError("Could not open archive.")
-		}
-		fmt.Print("[done]\n")
-
+		// Open the index
 		fmt.Print("Opening index...    ")
-		indexFile, indexErr := os.Open(c.String("index"))
+		indexFile, indexErr := os.Open(c.String("wpindex"))
 		if indexErr != nil {
 			return NewFileError("Could not open index.")
 		}
 		fmt.Print("[done]\n")
 
+		// Create WpindexReader
+		reader, readerErr := NewWpindexReader(indexFile)
+		if readerErr != nil {
+			return NewFileError("Could not understand index.")
+		}
+
 		// Load all the articles.
-		fmt.Print("Loading articles... ")
 		tLoad := time.Now()
 		ind := NewIndex()
-		LoadWikiCompressed(indexFile, archiveFile, func(a *Article) bool {
-			ind.AddArticle(a)
-			return true
-		})
+
+		articles := make(chan *StrippedArticle, 512)
+		ec := NewErrorContext()
+		ec.Start()
+		go func() {
+			n := 0
+			for sa := range articles {
+				n++
+				if n%10000 == 0 {
+					status := fmt.Sprintf(
+						"\rLoading wpindex...  [article:%d  title:'%s']%s\r",
+						n, sa.Title, strings.Repeat(" ", 100),
+					)[:100]
+
+					fmt.Printf(status)
+				}
+				ind.AddArticle(sa)
+			}
+			fmt.Print("\r", strings.Repeat(" ", 100), "\r")
+			ec.Done()
+		}()
+
+		var wpindexErr error = nil
+		for {
+			var sa *StrippedArticle
+			sa, wpindexErr = reader.ReadArticle()
+			if wpindexErr != nil {
+				break
+			}
+			articles <- sa
+		}
+		close(articles)
+
+		ec.Wait()
+
+		if wpindexErr != nil && wpindexErr != EOF {
+			return cli.NewExitError("Error loading .wpindex file: "+wpindexErr.Error(), 2)
+		}
+
+		closeErr := reader.Close()
+		if closeErr != nil {
+			return cli.NewExitError("Couldn't close .wpindex reader", 3)
+		}
+
 		dLoad := time.Since(tLoad).Seconds()
+		fmt.Print("Loading wpindex...  ")
 		fmt.Printf("[done in %4.2fs]\n", dLoad)
 
 		// Index all the articles.

@@ -30,25 +30,6 @@ type Article struct {
 	RevisionAuthorId  string   `xml:"revision>contributor>id"`
 }
 
-func LoadWikiToIndex(source io.Reader, ind *Index) {
-	// Does this in parallel. It's roughly 30% faster.
-
-	loadChan := make(chan *Article, 100)
-
-	go func() {
-		LoadWiki(source, func(a *Article) bool {
-			loadChan <- a
-			return true
-		})
-		close(loadChan)
-	}()
-
-	for a := range loadChan {
-		ind.AddArticle(a)
-	}
-
-}
-
 const chanSize int = 1024       // Buffers inbetween all channels
 const readerBufSize int = 50000 // File buffers in front of OS
 
