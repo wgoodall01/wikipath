@@ -12,6 +12,7 @@ var EOF error = io.EOF
 
 type StrippedArticle struct {
 	Title    string
+	Id       int
 	Redirect string
 	Links    []string
 }
@@ -21,6 +22,7 @@ func NewStrippedArticle(a *Article) *StrippedArticle {
 		Title:    a.Title,
 		Redirect: a.Redirect.Title,
 		Links:    ParseLinks(a.Text),
+		Id:       a.Id,
 	}
 }
 

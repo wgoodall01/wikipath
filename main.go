@@ -81,7 +81,7 @@ var indexCmd = cli.Command{
 			for sa := range articles {
 				n++
 				if n%500 == 0 {
-					cliTicker("Saving wpindex...   ", fmt.Sprintf("[article:%d  title:'%s']", n, sa.Title))
+					cliTicker("Saving wpindex...   ", fmt.Sprintf("[id:%d  title:'%s']", sa.Id, sa.Title))
 				}
 				writer.WriteArticle(sa)
 			}
@@ -94,13 +94,8 @@ var indexCmd = cli.Command{
 		}()
 
 		loadErr := LoadWikiCompressed(indexFile, archiveFile, func(a *Article) bool {
-			if a.Redirect.Title != "" {
-				// Do nothing if it's a redirect
-			} else {
-				// Item is normal, save it.
-				sa := StrippedArticle{Title: a.Title, Links: ParseLinks(a.Text)}
-				articles <- &sa
-			}
+			sa := NewStrippedArticle(a)
+			articles <- sa
 			return true
 		})
 
@@ -161,7 +156,7 @@ var startCmd = cli.Command{
 			for sa := range articles {
 				n++
 				if n%500 == 0 {
-					cliTicker("Loading wpindex...  ", fmt.Sprintf("[article:%d  title: %s]", n, sa.Title))
+					cliTicker("Loading wpindex...  ", fmt.Sprintf("[article:%d  title: %s]", sa.Id, sa.Title))
 				}
 				ind.AddArticle(sa)
 			}
