@@ -39,7 +39,7 @@ func LoadWikiCompressed(index io.Reader, source io.ReaderAt, visitor func(*Artic
 	chunks := loadIndexChunks(ec, index)
 	articles := make(chan *Article, chanSize)
 
-	nWorkers := runtime.GOMAXPROCS(4)
+	nWorkers := runtime.GOMAXPROCS(-1)
 
 	for i := 0; i < nWorkers; i++ {
 		decompressChunks(ec, source, chunks, articles)
