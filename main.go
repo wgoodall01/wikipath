@@ -28,6 +28,42 @@ func cliTicker(prompt string, tick string) {
 	fmt.Print(status)
 }
 
+type RateMeasure struct {
+	count   int
+	average float32
+	ticker  *time.Ticker
+}
+
+func NewRateMeasure(seconds float32) *RateMeasure {
+	rm := &RateMeasure{
+		count:   0,
+		average: 0,
+	}
+
+	rm.ticker = time.NewTicker(time.Duration(seconds*1000) * time.Millisecond)
+
+	go func() {
+		for range rm.ticker.C {
+			rm.average = float32(rm.count) / seconds
+			rm.count = 0
+		}
+	}()
+
+	return rm
+}
+
+func (this *RateMeasure) Stop() {
+	this.ticker.Stop()
+}
+
+func (this *RateMeasure) Count(n int) {
+	this.count += n
+}
+
+func (this *RateMeasure) Average() float32 {
+	return this.average
+}
+
 var indexCmd = cli.Command{
 	Name:  "index",
 	Usage: "Build an intermediate index of articles.",
@@ -77,14 +113,16 @@ var indexCmd = cli.Command{
 		ec.Start()
 		go func() {
 			n := 0
-
+			rate := NewRateMeasure(1)
 			for sa := range articles {
 				n++
+				rate.Count(1)
 				if n%500 == 0 {
-					cliTicker("Saving wpindex...   ", fmt.Sprintf("[id:%d  title:'%s']", sa.Id, sa.Title))
+					cliTicker("Saving wpindex...   ", fmt.Sprintf("[rate:%4.2f  id:%d  title:'%s']", rate.Average(), sa.Id, sa.Title))
 				}
 				writer.WriteArticle(sa)
 			}
+			rate.Stop()
 
 			closeErr := writer.Close()
 			if closeErr != nil {
@@ -153,13 +191,16 @@ var startCmd = cli.Command{
 		ec.Start()
 		go func() {
 			n := 0
+			rate := NewRateMeasure(0.5)
 			for sa := range articles {
 				n++
+				rate.Count(1)
 				if n%500 == 0 {
-					cliTicker("Loading wpindex...  ", fmt.Sprintf("[article:%d  title: %s]", sa.Id, sa.Title))
+					cliTicker("Loading wpindex...  ", fmt.Sprintf("[rate:%4.2f  article:%d  title: %s]", rate.Average(), sa.Id, sa.Title))
 				}
 				ind.AddArticle(sa)
 			}
+			rate.Stop()
 			ec.Done()
 		}()
 
