@@ -102,7 +102,7 @@ func BenchmarkLoadXML(b *testing.B) {
 
 		ind := NewIndex()
 		LoadWiki(archiveFile, func(a *Article) bool {
-			ind.AddArticle(a)
+			ind.AddArticle(NewStrippedArticle(a))
 			return true
 		})
 	})
@@ -115,7 +115,7 @@ func BenchmarkLoadXML(b *testing.B) {
 
 		ind := NewIndex()
 		LoadWiki(archiveStream, func(a *Article) bool {
-			ind.AddArticle(a)
+			ind.AddArticle(NewStrippedArticle(a))
 			return true
 		})
 	})
@@ -136,7 +136,7 @@ func BenchmarkLoadXML(b *testing.B) {
 		}()
 
 		for a := range loadChan {
-			ind.AddArticle(a)
+			ind.AddArticle(NewStrippedArticle(a))
 		}
 
 	})

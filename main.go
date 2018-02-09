@@ -3,11 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/urfave/cli"
 	"os"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/urfave/cli"
 )
 
 func NewFileError(msg string) *cli.ExitError {
@@ -263,21 +264,14 @@ var startCmd = cli.Command{
 			tSearch := time.Now()
 			fmt.Printf("\nSearching for path... ")
 			nSteps := 5
-			paths := ind.FindPath(items[0], items[1], nSteps)
+			path := ind.FindPath(items[0], items[1], nSteps)
 			dSearch := time.Since(tSearch).Seconds()
 			fmt.Printf("[done in %4.2f]\n", dSearch)
 
-			if len(paths) == 0 {
+			if path == nil {
 				fmt.Printf("No paths found in %d steps.", nSteps)
 			} else {
-				fmt.Printf("Path: ")
-				for i, item := range paths[0] {
-					if i != 0 {
-						fmt.Printf(" -> ")
-					}
-					fmt.Print(item.Title)
-				}
-				fmt.Println()
+				fmt.Println("Path: ", path)
 			}
 
 			fmt.Println()

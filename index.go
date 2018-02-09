@@ -1,7 +1,7 @@
 package main
 
 import (
-	"sort"
+	"container/list"
 	"strings"
 )
 
@@ -46,30 +46,48 @@ func (path *IndexPath) Append(it *IndexItem) *IndexPath {
 	}
 }
 
-// Returns a list of valid `IndexPath`s from `path` to `to`.
-func (path *IndexPath) PathsTo(to *IndexItem, depth int) []*IndexPath {
-	validPaths := make([]*IndexPath, 0)
-	if depth > 0 {
-		for _, link := range path.Item.Links {
-			linkPath := path.Append(link)
-			if link.FoundPath != nil && link.FoundPath.Len < path.Len {
-				// Ignore links already visited with a shorter path.
-				// Die.
-				return validPaths
-			} else if link == to {
-				// If the link is to the final location, append the link's path.
-				validPaths = append(validPaths, linkPath)
-			} else {
-				// If not, search the sub-links and append those paths.
-				validPaths = append(validPaths, linkPath.PathsTo(to, depth-1)...)
-			}
-
-			// Set found path.
-			path.Item.FoundPath = path
-		}
+func (path *IndexPath) ToSlice() []*IndexItem {
+	pathArr := make([]*IndexItem, path.Len)
+	for i := path.Len - 1; i >= 0; i-- {
+		pathArr[i] = path.Item
+		path = path.Prev
 	}
+	return pathArr
+}
 
-	return validPaths
+func (path *IndexPath) String() string {
+	items := path.ToSlice()
+	str := ""
+	for i, it := range items {
+		if i != 0 {
+			str += " > "
+		}
+		str += it.Title
+	}
+	return str
+}
+
+type PathQueue struct {
+	q *list.List
+}
+
+func NewPathQueue() *PathQueue {
+	return &PathQueue{
+		q: list.New(),
+	}
+}
+
+func (pq *PathQueue) Enqueue(path *IndexPath) {
+	pq.q.PushBack(path)
+}
+
+func (pq *PathQueue) Dequeue() *IndexPath {
+	item := pq.q.Front()
+	if item == nil {
+		return nil
+	}
+	pq.q.Remove(item)
+	return item.Value.(*IndexPath)
 }
 
 func NewIndex() *Index {
@@ -81,7 +99,7 @@ func NewIndex() *Index {
 }
 
 // Get a list of paths between two IndexItems, sorted by length.
-func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) [][]*IndexItem {
+func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 	// Ensure index is clean.
 	if ind.dirty {
 		ind.Reset()
@@ -94,26 +112,39 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) [][]*Index
 		ind.Build()
 	}
 
+	// Run the search.
+	path := pathSearch(from, to, depth)
+
+	return path
+}
+
+func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
+	queue := NewPathQueue()
 	rootPath := NewIndexPath(from)
-	validPaths := rootPath.PathsTo(to, depth)
+	from.FoundPath = rootPath
 
-	pathList := make([][]*IndexItem, len(validPaths))
-	for i, head := range validPaths {
-		path := make([]*IndexItem, head.Len)
-		for j := head.Len - 1; j >= 0; j-- {
-			path[j] = head.Item
-			head = head.Prev
+	path := rootPath
+	for ; path != nil; path = queue.Dequeue() {
+
+	LinksLoop:
+		for _, link := range path.Item.Links {
+			linkPath := path.Append(link)
+			if link.FoundPath != nil {
+				// This item has already been searched.
+				// Die.
+				continue LinksLoop
+			} else if link == to {
+				// This is it, return the path.
+				return linkPath
+			} else {
+				// If not, add to the queue of pages to be searched.
+				queue.Enqueue(linkPath)
+			}
 		}
-
-		pathList[i] = path
 	}
 
-	// Sort paths by length.
-	sort.Slice(pathList, func(i int, j int) bool {
-		return len(pathList[i]) < len(pathList[j])
-	})
-
-	return pathList
+	// No paths found.
+	return nil
 }
 
 func (ind *Index) Reset() {
