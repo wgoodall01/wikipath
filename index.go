@@ -11,11 +11,15 @@ func NormalizeArticleTitle(title string) string {
 }
 
 type Index struct {
-	itemIndex     map[string]*IndexItem // Map of normalized article title to `Item`s.
-	linkIndex     map[string][]string   // [nil if ready] Map of norm. titles to their normalized links.
-	redirectIndex map[string]string     // [nil if ready] Map of norm. titles to norm. titles representing redirects.
-	dirty         bool                  // If the items have been modified
-	ready         bool                  // If the index has been built
+	itemIndex map[string]*IndexItem // Map of normalized article title to `Item`s.
+	tempIndex map[string]*TempItem  // [nil if ready] Map of norm. titles to (links || redirects)
+	dirty     bool                  // If the items have been modified
+	ready     bool                  // If the index has been built
+}
+
+type TempItem struct {
+	Links    []string
+	Redirect string
 }
 
 type IndexItem struct {
@@ -135,9 +139,8 @@ func (pq *PathQueue) Dequeue() *IndexPath {
 
 func NewIndex() *Index {
 	return &Index{
-		itemIndex:     make(map[string]*IndexItem),
-		linkIndex:     make(map[string][]string),
-		redirectIndex: make(map[string]string),
+		itemIndex: make(map[string]*IndexItem),
+		tempIndex: make(map[string]*TempItem),
 	}
 }
 
@@ -228,11 +231,11 @@ func (ind *Index) AddArticle(a *StrippedArticle) {
 
 	if a.Redirect != "" {
 		// Item is a redirect, don't add it to the index.
-		ind.redirectIndex[k] = NormalizeArticleTitle(a.Redirect)
+		ind.tempIndex[k] = &TempItem{Redirect: NormalizeArticleTitle(a.Redirect)}
 	} else {
 		// Item is normal, index it.
 		ind.itemIndex[k] = &IndexItem{Title: a.Title}
-		ind.linkIndex[k] = a.Links
+		ind.tempIndex[k] = &TempItem{Links: a.Links}
 	}
 
 	ind.ready = false
@@ -242,37 +245,36 @@ func (ind *Index) Build() {
 	if !ind.ready {
 		// Go over indexed items
 		for k, item := range ind.itemIndex {
-			articleLinks := ind.linkIndex[k]
-			item.Forward = make([]*IndexItem, 0, len(articleLinks))
+			tempItem := ind.tempIndex[k]
 
-			for _, linkName := range articleLinks {
-				linkItem := ind.Get(linkName)
+			if tempItem.Redirect != "" {
+				redirItem, ok := ind.itemIndex[tempItem.Redirect]
 
-				// Check for broken links. Wikipedia isn't perfect.
-				if linkItem != nil {
-					// Append to forward and reverse link sets.
-					item.Forward = append(item.Forward, linkItem)
-					linkItem.Reverse = append(linkItem.Reverse, item)
+				// Only add link if item isn't a broken redirect
+				if ok {
+					ind.itemIndex[k] = redirItem
 				}
-			}
-		}
+			} else {
+				articleLinks := tempItem.Links
+				item.Forward = make([]*IndexItem, 0, len(articleLinks))
 
-		// Go over indexed redirects
-		for k, redir := range ind.redirectIndex {
-			redirItem, ok := ind.itemIndex[redir]
+				for _, linkName := range articleLinks {
+					linkItem := ind.Get(linkName)
 
-			// Only add link if item isn't a broken redirect
-			if ok {
-				ind.itemIndex[k] = redirItem
+					// Check for broken links. Wikipedia isn't perfect.
+					if linkItem != nil {
+						// Append to forward and reverse link sets.
+						item.Forward = append(item.Forward, linkItem)
+						linkItem.Reverse = append(linkItem.Reverse, item)
+					}
+				}
 			}
 		}
 
 	}
 
-	// Remove link, redirect indexes, they're unneeded.
-	// Redirects are now built in to the itemIndex
-	ind.redirectIndex = nil
-	ind.linkIndex = nil
+	// Remove temp index, it's unneeded.
+	ind.tempIndex = nil
 
 	// Index is now ready.
 	ind.ready = true
@@ -287,11 +289,11 @@ func (ind *Index) Status() (ready bool, dirty bool) {
 // Follows any and all redirects.
 func (ind *Index) Get(title string) *IndexItem {
 	k := NormalizeArticleTitle(title)
-	redir := ind.redirectIndex[k] // Get a redirect
-	if redir != "" {
+	tempItem := ind.tempIndex[k] // Get a temp item, if exists.
+	if tempItem != nil && tempItem.Redirect != "" {
 		// Follow ONE redirect to an article.
 		// Wikipedia doesn't allow for >1 redirect, so there can't be loops.
-		return ind.itemIndex[redir]
+		return ind.itemIndex[tempItem.Redirect]
 	} else {
 		// Return the item from the index
 		return ind.itemIndex[k]
