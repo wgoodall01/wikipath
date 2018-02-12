@@ -21,28 +21,71 @@ type Index struct {
 type IndexItem struct {
 	Title     string       // Non-normalized title of the page.
 	FoundPath *IndexPath   // If this item has been visited before.
-	Links     []*IndexItem // Pointers to other items, representing the links on the page.
+	Forward   []*IndexItem // Items this pages links to.
+	Reverse   []*IndexItem // Items which link to this one.
 }
+
+type Direction bool
+
+const FORWARD Direction = true
+const REVERSE Direction = false
 
 type IndexPath struct {
-	Item *IndexItem // Item in the path
-	Prev *IndexPath // The previous item, `nil` if the starting item.
-	Len  int        // Length of the path
+	Item      *IndexItem // Item in the path
+	Prev      *IndexPath // The previous item, `nil` if the starting item.
+	Len       int        // Length of the path
+	Direction Direction  // The direction the path is from.
 }
 
-func NewIndexPath(it *IndexItem) *IndexPath {
+func NewIndexPath(it *IndexItem, direction Direction) *IndexPath {
 	return &IndexPath{
-		Item: it,
-		Prev: nil,
-		Len:  1,
+		Item:      it,
+		Prev:      nil,
+		Len:       1,
+		Direction: direction,
 	}
+}
+
+// Join a forward and a reverse path together into one. The
+// heads of each path must point to the same item.
+// Returns nil if it doesn't work out.
+func NewIndexPathByJoin(i1 *IndexPath, i2 *IndexPath) *IndexPath {
+	var all *IndexPath
+	var rest *IndexPath
+
+	if i1.Direction == FORWARD && i2.Direction == REVERSE {
+		all = i1
+		rest = i2
+	} else if i1.Direction == REVERSE && i2.Direction == FORWARD {
+		all = i2
+		rest = i1
+	} else {
+		// They have to be one forwards, one reverse.
+		return nil
+	}
+
+	if rest.Item != all.Item {
+		// They don't join up evenly. Die.
+		return nil
+	}
+
+	// Advance rest by 1, skip
+	rest = rest.Prev
+
+	for rest != nil {
+		all = all.Append(rest.Item)
+		rest = rest.Prev
+	}
+
+	return all
 }
 
 func (path *IndexPath) Append(it *IndexItem) *IndexPath {
 	return &IndexPath{
-		Item: it,
-		Prev: path,
-		Len:  path.Len + 1,
+		Item:      it,
+		Prev:      path,
+		Len:       path.Len + 1,
+		Direction: path.Direction,
 	}
 }
 
@@ -100,6 +143,11 @@ func NewIndex() *Index {
 
 // Get a list of paths between two IndexItems, sorted by length.
 func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath {
+	// Idiot check
+	if from == to {
+		return NewIndexPath(from, FORWARD)
+	}
+
 	// Ensure index is clean.
 	if ind.dirty {
 		ind.Reset()
@@ -120,30 +168,45 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath
 
 func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 	queue := NewPathQueue()
-	rootPath := NewIndexPath(from)
-	from.FoundPath = rootPath
 
-	path := rootPath
+	fromPath := NewIndexPath(from, FORWARD)
+	toPath := NewIndexPath(to, REVERSE)
+	queue.Enqueue(toPath)
+
+	path := fromPath
+
 	for ; path != nil; path = queue.Dequeue() {
 
-	LinksLoop:
-		for _, link := range path.Item.Links {
+		// Get the right link list depending on direction
+		var links []*IndexItem
+		if path.Direction == FORWARD {
+			links = path.Item.Forward
+		} else {
+			links = path.Item.Reverse
+		}
+
+		for _, link := range links {
 			linkPath := path.Append(link)
-			if link.FoundPath != nil {
-				// This item has already been searched.
-				// Die.
-				continue LinksLoop
-			} else if link == to {
-				// This is it, return the path.
+
+			if (linkPath.Direction == FORWARD && link == to) || (linkPath.Direction == REVERSE && link == from) {
+				// Found the end of the path.
 				return linkPath
-			} else {
-				// If not, add to the queue of pages to be searched.
+			} else if link.FoundPath == nil {
+				// Not searched yet. Add this to the queue of pages to be searched.
+				link.FoundPath = linkPath
 				queue.Enqueue(linkPath)
+			} else if link.FoundPath.Direction == linkPath.Direction {
+				// Already searched in the same direction.
+				// Ignore it.
+			} else {
+				// At this point, link.FoundPath.Direction != linkPath.Direction
+				// We've met the search coming from the other direction.
+				return NewIndexPathByJoin(linkPath, link.FoundPath)
 			}
 		}
 	}
 
-	// No paths found.
+	// Nothing happened.
 	return nil
 }
 
@@ -180,14 +243,16 @@ func (ind *Index) Build() {
 		// Go over indexed items
 		for k, item := range ind.itemIndex {
 			articleLinks := ind.linkIndex[k]
-			item.Links = make([]*IndexItem, 0, len(articleLinks))
+			item.Forward = make([]*IndexItem, 0, len(articleLinks))
 
 			for _, linkName := range articleLinks {
 				linkItem := ind.Get(linkName)
 
 				// Check for broken links. Wikipedia isn't perfect.
 				if linkItem != nil {
-					item.Links = append(item.Links, linkItem)
+					// Append to forward and reverse link sets.
+					item.Forward = append(item.Forward, linkItem)
+					linkItem.Reverse = append(linkItem.Reverse, item)
 				}
 			}
 		}

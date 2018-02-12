@@ -263,7 +263,7 @@ var startCmd = cli.Command{
 
 			tSearch := time.Now()
 			fmt.Printf("\nSearching for path... ")
-			nSteps := 5
+			nSteps := 6
 			path := ind.FindPath(items[0], items[1], nSteps)
 			dSearch := time.Since(tSearch).Seconds()
 			fmt.Printf("[done in %4.2f]\n", dSearch)
