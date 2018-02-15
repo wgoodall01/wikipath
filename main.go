@@ -65,6 +65,49 @@ func (this *RateMeasure) Average() float32 {
 	return this.average
 }
 
+var indexShowCmd = cli.Command{
+	Name:  "index-show",
+	Usage: "Show an article's entry in the index.",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "wpindex, i",
+			Usage: "Previously-generated *.wpindex file",
+		},
+	},
+	Action: func(c *cli.Context) error {
+		// Open the index
+		fmt.Print("Opening index...    ")
+		indexFile, indexErr := os.Open(c.String("wpindex"))
+		if indexErr != nil {
+			return NewFileError("Could not open index.")
+		}
+		fmt.Print("[done]\n")
+
+		// Create WpindexReader
+		reader, readerErr := NewWpindexReader(indexFile)
+		if readerErr != nil {
+			return NewFileError("Could not understand index.")
+		}
+
+		for {
+			sa, _ := reader.ReadArticle()
+			if sa == nil {
+				break
+			}
+			if NormalizeArticleTitle(sa.Title) == NormalizeArticleTitle(c.Args()[0]) {
+				fmt.Println(sa.Title)
+				for _, l := range sa.Links {
+					fmt.Println("  " + l)
+				}
+				break
+			}
+
+		}
+
+		return nil
+	},
+}
+
 var indexCmd = cli.Command{
 	Name:  "index",
 	Usage: "Build an intermediate index of articles.",
@@ -261,9 +304,13 @@ var startCmd = cli.Command{
 				}
 			}
 
+			fmt.Println()
+			fmt.Printf("%20s    %4d ->  \n", items[0].Title, len(items[0].Forward))
+			fmt.Printf("%20s  <- %-4d   \n", items[1].Title, len(items[1].Reverse))
+
 			tSearch := time.Now()
 			fmt.Printf("\nSearching for path... ")
-			nSteps := 6
+			nSteps := 10
 			path := ind.FindPath(items[0], items[1], nSteps)
 			dSearch := time.Since(tSearch).Seconds()
 			fmt.Printf("[done in %4.2f]\n", dSearch)
@@ -288,7 +335,7 @@ func main() {
 	app.HelpName = app.Name
 	app.Usage = "Find a path of links between two wiki pages."
 
-	app.Commands = []cli.Command{indexCmd, startCmd}
+	app.Commands = []cli.Command{indexCmd, indexShowCmd, startCmd}
 
 	app.Run(os.Args)
 }
