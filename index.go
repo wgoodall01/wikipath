@@ -229,13 +229,21 @@ func (ind *Index) AddArticle(a *StrippedArticle) {
 	// - Figure out redirects, add them to the redirectIndex.
 	k := NormalizeArticleTitle(a.Title)
 
-	if a.Redirect != "" {
-		// Item is a redirect, don't add it to the index.
-		ind.tempIndex[k] = &TempItem{Redirect: NormalizeArticleTitle(a.Redirect)}
+	if ind.tempIndex[k] != nil {
+		// Item already exists, do some appends.
+		tempItem := ind.tempIndex[k]
+		tempItem.Links = append(tempItem.Links, a.Links...)
 	} else {
-		// Item is normal, index it.
-		ind.itemIndex[k] = &IndexItem{Title: a.Title}
-		ind.tempIndex[k] = &TempItem{Links: a.Links}
+		// Item doesn't exist, create it.
+
+		if a.Redirect != "" {
+			// Item is a redirect, don't add it to the index.
+			ind.tempIndex[k] = &TempItem{Redirect: NormalizeArticleTitle(a.Redirect)}
+		} else {
+			// Item is normal, index it.
+			ind.tempIndex[k] = &TempItem{Links: a.Links}
+			ind.itemIndex[k] = &IndexItem{Title: a.Title}
+		}
 	}
 
 	ind.ready = false
@@ -244,8 +252,8 @@ func (ind *Index) AddArticle(a *StrippedArticle) {
 func (ind *Index) Build() {
 	if !ind.ready {
 		// Go over indexed items
-		for k, item := range ind.itemIndex {
-			tempItem := ind.tempIndex[k]
+		for k, tempItem := range ind.tempIndex {
+			item := ind.itemIndex[k]
 
 			if tempItem.Redirect != "" {
 				redirItem, ok := ind.itemIndex[tempItem.Redirect]
@@ -256,7 +264,10 @@ func (ind *Index) Build() {
 				}
 			} else {
 				articleLinks := tempItem.Links
-				item.Forward = make([]*IndexItem, 0, len(articleLinks))
+
+				if item.Forward == nil {
+					item.Forward = make([]*IndexItem, 0, len(articleLinks))
+				}
 
 				for _, linkName := range articleLinks {
 					linkItem := ind.Get(linkName)
@@ -270,7 +281,6 @@ func (ind *Index) Build() {
 				}
 			}
 		}
-
 	}
 
 	// Remove temp index, it's unneeded.
