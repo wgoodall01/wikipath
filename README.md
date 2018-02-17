@@ -1,4 +1,8 @@
-# wikipath [![Build Status](https://travis-ci.org/wgoodall01/wikipath.svg?branch=master)](https://travis-ci.org/wgoodall01/wikipath) [![Go Report Card](https://goreportcard.com/badge/github.com/wgoodall01/wikipath)](https://goreportcard.com/report/github.com/wgoodall01/wikipath) [![codecov](https://codecov.io/gh/wgoodall01/wikipath/branch/master/graph/badge.svg)](https://codecov.io/gh/wgoodall01/wikipath)
+# wikipath 
+
+[![Travis](https://img.shields.io/travis/wgoodall01/wikipath.svg?style=flat-square)](https://travis-ci.org/wgoodall01/wikipath)
+[![Codecov](https://img.shields.io/codecov/c/github/wgoodall01/wikipath.svg?style=flat-square)](https://codecov.io/gh/wgoodall01/wikipath)
+[![Code Climate](https://img.shields.io/codeclimate/github/wgoodall01/wikipath.svg?style=flat-square)](https://codeclimate.com/github/wgoodall01/wikipath)
 </h1>
 Find the 'six degrees of wikipedia' between any two subjects, also known as the Wiki Game.
 
