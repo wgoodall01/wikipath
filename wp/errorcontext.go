@@ -1,11 +1,8 @@
-package main
+package wikipath
 
 import (
-	"errors"
 	"sync"
 )
-
-var StoppedErr error = errors.New("Visitor stopped reading.")
 
 type ErrorContext struct {
 	wg       sync.WaitGroup

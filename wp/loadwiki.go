@@ -1,4 +1,4 @@
-package main
+package wikipath
 
 import (
 	"bufio"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 )
+
+var StoppedErr error = errors.New("Visitor stopped reading.")
 
 type Redirect struct {
 	Title string `xml:"title,attr"`
