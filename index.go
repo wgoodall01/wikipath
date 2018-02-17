@@ -2,7 +2,9 @@ package main
 
 import (
 	"container/list"
+	"runtime"
 	"strings"
+	"sync"
 )
 
 func NormalizeArticleTitle(title string) string {
@@ -11,22 +13,25 @@ func NormalizeArticleTitle(title string) string {
 }
 
 type Index struct {
-	itemIndex map[string]*IndexItem // Map of normalized article title to `Item`s.
-	tempIndex map[string]*TempItem  // [nil if ready] Map of norm. titles to (links || redirects)
-	dirty     bool                  // If the items have been modified
-	ready     bool                  // If the index has been built
-}
+	itemIndex    map[string]*IndexItem // Map of normalized article title to `Item`s.
+	itemIndexMut sync.RWMutex
 
-type TempItem struct {
-	Links    []string
-	Redirect string
+	tempLinks  []*StrippedArticle // [empty if ready] Articles to be indexed.
+	tempRedirs []*StrippedArticle // [empty if ready] Redirects to be indexed.
+
+	dirty bool // If the items have been modified
+	ready bool // If the index has been built
 }
 
 type IndexItem struct {
-	Title     string       // Non-normalized title of the page.
-	FoundPath *IndexPath   // If this item has been visited before.
-	Forward   []*IndexItem // Items this pages links to.
-	Reverse   []*IndexItem // Items which link to this one.
+	Title     string     // Non-normalized title of the page.
+	FoundPath *IndexPath // If this item has been visited before.
+
+	Forward    []*IndexItem // Items this pages links to.
+	ForwardMut sync.Mutex
+
+	Reverse    []*IndexItem // Items which link to this one.
+	ReverseMut sync.Mutex
 }
 
 type Direction bool
@@ -139,8 +144,9 @@ func (pq *PathQueue) Dequeue() *IndexPath {
 
 func NewIndex() *Index {
 	return &Index{
-		itemIndex: make(map[string]*IndexItem),
-		tempIndex: make(map[string]*TempItem),
+		itemIndex:  make(map[string]*IndexItem),
+		tempLinks:  make([]*StrippedArticle, 0),
+		tempRedirs: make([]*StrippedArticle, 0),
 	}
 }
 
@@ -229,62 +235,98 @@ func (ind *Index) AddArticle(a *StrippedArticle) {
 	// - Figure out redirects, add them to the redirectIndex.
 	k := NormalizeArticleTitle(a.Title)
 
-	if ind.tempIndex[k] != nil {
-		// Item already exists, do some appends.
-		tempItem := ind.tempIndex[k]
-		tempItem.Links = append(tempItem.Links, a.Links...)
+	if a.Redirect != "" {
+		// Article is a redirect, add to redirect index.
+		ind.tempRedirs = append(ind.tempRedirs, a)
 	} else {
-		// Item doesn't exist, create it.
+		// Article is not a redirect.
 
-		if a.Redirect != "" {
-			// Item is a redirect, don't add it to the index.
-			ind.tempIndex[k] = &TempItem{Redirect: NormalizeArticleTitle(a.Redirect)}
-		} else {
-			// Item is normal, index it.
-			ind.tempIndex[k] = &TempItem{Links: a.Links}
+		// Make article if it doesn't already exist.
+		if ind.itemIndex[k] == nil {
 			ind.itemIndex[k] = &IndexItem{Title: a.Title}
 		}
+
+		// Add links to temp link index.
+		ind.tempLinks = append(ind.tempLinks, a)
 	}
 
+	// Flag index as not ready.
+	// Will rebuild on next use.
 	ind.ready = false
 }
 
 func (ind *Index) Build() {
-	if !ind.ready {
-		// Go over indexed items
-		for k, tempItem := range ind.tempIndex {
-			item := ind.itemIndex[k]
 
-			if tempItem.Redirect != "" {
-				redirItem, ok := ind.itemIndex[tempItem.Redirect]
+	itemPump := func(tempLinks []*StrippedArticle, tempItems chan<- *StrippedArticle) {
+		for _, sa := range tempLinks {
+			tempItems <- sa
+		}
+		close(tempItems)
+	}
 
-				// Only add link if item isn't a broken redirect
-				if ok {
-					ind.itemIndex[k] = redirItem
-				}
-			} else {
-				articleLinks := tempItem.Links
+	linkWorker := func(ec *ErrorContext, tempItems <-chan *StrippedArticle) {
+		// read tempItem from chan
+		for {
+			sa := <-tempItems
+			if sa == nil {
+				break
+			}
 
-				if item.Forward == nil {
-					item.Forward = make([]*IndexItem, 0, len(articleLinks))
-				}
+			k := NormalizeArticleTitle(sa.Title)
 
-				for _, linkName := range articleLinks {
-					linkItem := ind.Get(linkName)
+			// tempItem isn't a redirect
 
-					// Check for broken links. Wikipedia isn't perfect.
-					if linkItem != nil {
-						// Append to forward and reverse link sets.
-						item.Forward = append(item.Forward, linkItem)
-						linkItem.Reverse = append(linkItem.Reverse, item)
-					}
+			// For each link in the article, add a forward and reverse pointer
+			linkSrc := ind.Get(k) // Get() takes care of locking
+			for _, linkName := range sa.Links {
+				linkDst := ind.Get(linkName)
+
+				// Check for broken links.
+				if linkDst != nil {
+					// Append to forward links
+					linkSrc.ForwardMut.Lock()
+					linkSrc.Forward = append(linkSrc.Forward, linkDst)
+					linkSrc.ForwardMut.Unlock()
+
+					// Append to reverse links
+					linkDst.ReverseMut.Lock()
+					linkDst.Reverse = append(linkDst.Reverse, linkSrc)
+					linkDst.ReverseMut.Unlock()
 				}
 			}
+		}
+		ec.Done()
+	}
+
+	linksWait := NewErrorContext()
+
+	// Channel of all the temp items which need indexing.
+	tempItems := make(chan *StrippedArticle)
+	go itemPump(ind.tempLinks, tempItems)
+
+	nWorkers := runtime.GOMAXPROCS(-1)
+	for i := 0; i < nWorkers; i++ {
+		linksWait.Add(1)
+		go linkWorker(linksWait, tempItems)
+	}
+
+	// Wait for all link workers to finish indexing.
+	linksWait.Wait()
+
+	// Index all redirects.
+	for _, sa := range ind.tempRedirs {
+		k := NormalizeArticleTitle(sa.Title)
+		redir := ind.Get(sa.Redirect)
+
+		// Check for broken links.
+		if redir != nil {
+			ind.itemIndex[k] = redir
 		}
 	}
 
 	// Remove temp index, it's unneeded.
-	ind.tempIndex = nil
+	ind.tempLinks = nil
+	ind.tempRedirs = nil
 
 	// Index is now ready.
 	ind.ready = true
@@ -296,16 +338,9 @@ func (ind *Index) Status() (ready bool, dirty bool) {
 }
 
 // Get an IndexItem by article title.
-// Follows any and all redirects.
 func (ind *Index) Get(title string) *IndexItem {
 	k := NormalizeArticleTitle(title)
-	tempItem := ind.tempIndex[k] // Get a temp item, if exists.
-	if tempItem != nil && tempItem.Redirect != "" {
-		// Follow ONE redirect to an article.
-		// Wikipedia doesn't allow for >1 redirect, so there can't be loops.
-		return ind.itemIndex[tempItem.Redirect]
-	} else {
-		// Return the item from the index
-		return ind.itemIndex[k]
-	}
+	ind.itemIndexMut.RLock()
+	defer ind.itemIndexMut.RUnlock()
+	return ind.itemIndex[k]
 }

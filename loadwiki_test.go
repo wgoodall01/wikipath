@@ -3,17 +3,11 @@ package main
 import (
 	"bufio"
 	"compress/bzip2"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 )
-
-var archivePath = flag.String("archivePath", "./wikis/simple.xml", "Path to the wiki dump, as an .xml file.")
-var bzipPath = flag.String("bzipPath", "./wikis/simple.xml.bz2", "Path to the wiki dump, as an .xml.bz2 file.")
-var indexPath = flag.String("indexPath", "./wikis/simple-index.txt", "Path to the index, as a .txt")
-var bzipIndexPath = flag.String("bzipIndexPath", "./wikis/simple-index.txt.bz2", "Path to the index, as a .txt.bz2")
 
 func assertEqual(t *testing.T, a interface{}, b interface{}) {
 	if a != b {
@@ -97,7 +91,7 @@ func checkError(b *testing.B, err error) {
 func BenchmarkLoadXML(b *testing.B) {
 
 	b.Run("LoadSync", func(b *testing.B) {
-		archiveFile, fileErr := os.Open(*archivePath)
+		archiveFile, fileErr := os.Open(*wikiArchivePath)
 		checkError(b, fileErr)
 
 		ind := NewIndex()
@@ -108,7 +102,7 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadBzippedSync", func(b *testing.B) {
-		bzipRaw, fileErr := os.Open(*bzipPath)
+		bzipRaw, fileErr := os.Open(*wikiArchiveBzipPath)
 		checkError(b, fileErr)
 		bzipFile := bufio.NewReader(bzipRaw)
 		archiveStream := bzip2.NewReader(bzipFile)
@@ -121,7 +115,7 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadAsync", func(b *testing.B) {
-		archiveFile, fileErr := os.Open(*archivePath)
+		archiveFile, fileErr := os.Open(*wikiArchivePath)
 		checkError(b, fileErr)
 		ind := NewIndex()
 
@@ -142,8 +136,8 @@ func BenchmarkLoadXML(b *testing.B) {
 	})
 
 	b.Run("LoadBzippedAsync", func(b *testing.B) {
-		index, idxErr := os.Open(*bzipIndexPath)
-		archive, archiveErr := os.Open(*bzipPath)
+		index, idxErr := os.Open(*WikiArchiveIndexBzipPath)
+		archive, archiveErr := os.Open(*wikiArchiveBzipPath)
 		checkError(b, idxErr)
 		checkError(b, archiveErr)
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	_ "github.com/davecgh/go-spew/spew"
@@ -14,15 +15,21 @@ var E = &Article{Title: "E", Redirect: Redirect{Title: "B"}}
 
 func testRedirect(t *testing.T, index *Index) {
 	redir := index.Get("E")
+	if redir == nil {
+		t.Fatal("Redirection: index.Get(\"E\") should return B, returned nil.")
+	}
 	if redir.Title != "B" {
 		t.Fatal("Redirecting: index.Get(\"E\") should return B, returned", redir.Title)
 	}
 }
 
 func testGet(t *testing.T, index *Index) {
-	title := index.Get("B").Title
-	if title != "B" {
-		t.Fatal("index.Get(\"B\") returned", title)
+	item := index.Get("B")
+	if item == nil {
+		t.Fatal("index.Get(\"B\") returned nil.")
+	}
+	if item.Title != "B" {
+		t.Fatal("index.Get(\"B\") returned", item.Title)
 	}
 }
 
@@ -53,11 +60,6 @@ func TestIndex(t *testing.T) {
 		if dirty != false {
 			t.Fatal("Reports dirty before FindPath() is called")
 		}
-	})
-
-	t.Run("AccessPreBuild", func(t *testing.T) {
-		testRedirect(t, index)
-		testGet(t, index)
 	})
 
 	t.Run("Build", func(t *testing.T) {
@@ -105,5 +107,39 @@ func TestIndex(t *testing.T) {
 		if path == nil {
 			t.Fatal("Did not find path")
 		}
+	})
+}
+
+func die(b *testing.B, err error, msg string, args ...interface{}) {
+	if err != nil {
+		b.Logf(msg, args...)
+		b.Fatal(err)
+	}
+}
+
+func BenchmarkIndex(b *testing.B) {
+	ind := NewIndex()
+
+	b.Run("LoadWpindex", func(b *testing.B) {
+		wpindexFile, wpindexFileErr := os.Open(*wpindexPath)
+		die(b, wpindexFileErr, "Couldnt' open *.wpindex file.")
+
+		wir, wirError := NewWpindexReader(wpindexFile)
+		die(b, wirError, "Error creating wpindex reader.")
+
+		for {
+			article, readErr := wir.ReadArticle()
+			if readErr == EOF {
+				break
+			} else if readErr != nil {
+				die(b, readErr, "wpindex read error article=%v", article)
+			} else {
+				ind.AddArticle(article)
+			}
+		}
+	})
+
+	b.Run("BuildIndex", func(b *testing.B) {
+		ind.Build()
 	})
 }
