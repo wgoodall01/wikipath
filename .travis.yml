@@ -10,5 +10,11 @@ before_install:
   - chmod +x $GOPATH/bin/dep
 
 install:
-  - cd cli && dep ensure
+  - (cd cli && dep ensure)
 
+script: 
+  - pwd
+  - ./test.sh
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

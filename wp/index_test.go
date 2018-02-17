@@ -3,8 +3,6 @@ package wikipath
 import (
 	"os"
 	"testing"
-
-	_ "github.com/davecgh/go-spew/spew"
 )
 
 var A = &Article{Title: "A", Text: "[[B]] [[C]]"}
