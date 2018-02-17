@@ -4,6 +4,8 @@ import (
 	"sync"
 )
 
+// ErrorContext keeps track of cancellation and error propagation
+// across goroutines.
 type ErrorContext struct {
 	wg       sync.WaitGroup
 	Canceled chan struct{}
@@ -14,18 +16,19 @@ type ErrorContext struct {
 	latest int
 }
 
+// NewErrorContext creates an ErrorContext.
 func NewErrorContext() *ErrorContext {
 	ec := &ErrorContext{Canceled: make(chan struct{})}
 	return ec
 }
 
-// Add(n) adds n workers to the loadContext.
+// Add adds `n` workers to the loadContext.
 func (ec *ErrorContext) Add(n int) {
 	ec.wg.Add(n)
 	ec.latest = ec.latest + n
 }
 
-// Start() adds a worker and returns an ID for it.
+// Start adds a worker and returns an ID for it.
 func (ec *ErrorContext) Start() int {
 	ec.wg.Add(1)
 
@@ -33,12 +36,12 @@ func (ec *ErrorContext) Start() int {
 	return ec.latest
 }
 
-// Done() marks a worker as done.
+// Done marks a worker as done.
 func (ec *ErrorContext) Done() {
 	ec.wg.Done()
 }
 
-// Cancel(err) cancels the ErrorContext with an error, closing the Canceled channel.
+// Cancel cancels the ErrorContext with an error, closing the Canceled channel.
 // Subsequent calls to Cancel() have no effect.
 func (ec *ErrorContext) Cancel(err error) {
 	ec.errMut.Lock()
@@ -53,7 +56,8 @@ func (ec *ErrorContext) Cancel(err error) {
 	ec.errMut.Unlock()
 }
 
-// Wait() blocks until either all worker goroutines call Done(), or the ErrorContext is canceled. It returns nil on success, and the error if one occurs.
+// Wait blocks until either all worker goroutines call Done(), or
+// the ErrorContext is canceled. It returns nil on success, and the error if one occurs.
 func (ec *ErrorContext) Wait() error {
 	success := make(chan struct{})
 

@@ -11,6 +11,7 @@ import (
 	. "github.com/wgoodall01/wikipath/wp"
 )
 
+// StartCmd starts the interactive query mode.
 var StartCmd = cli.Command{
 	Name:  "start",
 	Usage: "Start interactive mode",
@@ -45,7 +46,7 @@ var StartCmd = cli.Command{
 				n++
 				rate.Count(1)
 				if n%500 == 0 {
-					PrintTicker("Loading wpindex...  ", fmt.Sprintf("[rate:%4.2f  article:%d  title: %s]", rate.Average(), sa.Id, sa.Title))
+					PrintTicker("Loading wpindex...  ", fmt.Sprintf("[rate:%4.2f  article:%d  title: %s]", rate.Average(), sa.ID, sa.Title))
 				}
 				ind.AddArticle(sa)
 			}
@@ -76,7 +77,7 @@ var StartCmd = cli.Command{
 		}
 
 		dLoad := time.Since(tLoad).Seconds()
-		PrintTicker("Loading wpindex...  ", fmt.Sprintf("[done in %4.2f s]", dLoad))
+		PrintTicker("Loading wpindex...  ", fmt.Sprintf("[done in %4.2fs]", dLoad))
 		fmt.Println()
 
 		// Index all the articles.
@@ -101,7 +102,7 @@ var StartCmd = cli.Command{
 			names[0] = Prompt("First Article")
 			names[1] = Prompt("Second Article")
 
-			for i, _ := range names {
+			for i := range names {
 				items[i] = ind.Get(names[i])
 				if items[i] == nil {
 					fmt.Printf("Error: Can't find article '%s'", names[i])
@@ -118,7 +119,7 @@ var StartCmd = cli.Command{
 			nSteps := 10
 			path := ind.FindPath(items[0], items[1], nSteps)
 			dSearch := time.Since(tSearch).Seconds()
-			fmt.Printf("[done in %4.2f]\n", dSearch)
+			fmt.Printf("[done in %4.2fs]\n", dSearch)
 
 			if path == nil {
 				fmt.Printf("No paths found in %d steps.", nSteps)

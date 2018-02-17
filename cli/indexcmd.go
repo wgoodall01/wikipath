@@ -10,6 +10,8 @@ import (
 	. "github.com/wgoodall01/wikipath/wp"
 )
 
+// IndexCmd is the command to start building a `*.wpindex` file from
+// a wiki archive.
 var IndexCmd = cli.Command{
 	Name:  "index",
 	Usage: "Build an intermediate index of articles.",
@@ -48,7 +50,7 @@ var IndexCmd = cli.Command{
 				n++
 				rate.Count(1)
 				if n%500 == 0 {
-					PrintTicker("Saving wpindex...   ", fmt.Sprintf("[rate:%4.2f  id:%d  title:'%s']", rate.Average(), sa.Id, sa.Title))
+					PrintTicker("Saving wpindex...   ", fmt.Sprintf("[rate:%4.2f  id:%d  title:'%s']", rate.Average(), sa.ID, sa.Title))
 				}
 				writer.WriteArticle(sa) // write article to *.wpindex
 			}

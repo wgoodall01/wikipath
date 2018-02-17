@@ -16,7 +16,7 @@ func assertEqual(t *testing.T, a interface{}, b interface{}) {
 	}
 }
 
-const testXml = `
+const testXML = `
 <mediawiki>
   <page>
     <title>Abrahamic religion</title>
@@ -43,7 +43,7 @@ const testXml = `
 `
 
 func TestGetAnArticle(t *testing.T) {
-	xmlReader := strings.NewReader(testXml)
+	xmlReader := strings.NewReader(testXML)
 
 	cb := func(a *Article) bool {
 		assertEqual(t, a.Title, "Abrahamic religion")

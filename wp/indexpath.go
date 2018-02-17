@@ -1,5 +1,16 @@
 package wikipath
 
+// Direction is either forward or reverse. This represents
+// a direction for the bidirectional search.
+type Direction bool
+
+// FORWARD goes forward
+const FORWARD Direction = true
+
+// REVERSE goes in reverse
+const REVERSE Direction = false
+
+// IndexPath represents a link path through the Index.
 type IndexPath struct {
 	Item      *IndexItem // Item in the path
 	Prev      *IndexPath // The previous item, `nil` if the starting item.
@@ -7,6 +18,7 @@ type IndexPath struct {
 	Direction Direction  // The direction the path is from.
 }
 
+// NewIndexPath creates an IndexPath from a starting node and a Direction.
 func NewIndexPath(it *IndexItem, direction Direction) *IndexPath {
 	return &IndexPath{
 		Item:      it,
@@ -16,7 +28,7 @@ func NewIndexPath(it *IndexItem, direction Direction) *IndexPath {
 	}
 }
 
-// Join a forward and a reverse path together into one. The
+// NewIndexPathByJoin joins a forward and a reverse path together into one. The
 // heads of each path must point to the same item.
 // Returns nil if it doesn't work out.
 func NewIndexPathByJoin(i1 *IndexPath, i2 *IndexPath) *IndexPath {
@@ -50,6 +62,7 @@ func NewIndexPathByJoin(i1 *IndexPath, i2 *IndexPath) *IndexPath {
 	return all
 }
 
+// Append returns a new IndexPath by appending `it` to `path`.
 func (path *IndexPath) Append(it *IndexItem) *IndexPath {
 	return &IndexPath{
 		Item:      it,
@@ -59,6 +72,7 @@ func (path *IndexPath) Append(it *IndexItem) *IndexPath {
 	}
 }
 
+// ToSlice returns the IndexPath as a []*IndexItem.
 func (path *IndexPath) ToSlice() []*IndexItem {
 	pathArr := make([]*IndexItem, path.Len)
 	for i := path.Len - 1; i >= 0; i-- {

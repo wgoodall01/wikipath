@@ -13,28 +13,32 @@ import (
 	"sync"
 )
 
-var StoppedErr error = errors.New("Visitor stopped reading.")
+// ErrStopped is returned when the visitor stops reading articles.
+var ErrStopped = errors.New("visitor stopped reading")
 
+// Redirect title of another article
 type Redirect struct {
 	Title string `xml:"title,attr"`
 }
 
+// Article is an article from the wiki archive XML file.
 type Article struct {
-	Id                int      `xml:"id"`
+	ID                int      `xml:"id"`
 	Namespace         int      `xml:"ns"`
 	Title             string   `xml:"title"`
 	Redirect          Redirect `xml:"redirect"`
 	Text              string   `xml:"revision>text"`
-	RevisionId        int      `xml:"revision>id"`
+	RevisionID        int      `xml:"revision>id"`
 	RevisionTimestamp string   `xml:"revision>timestamp"`
 	RevisionFormat    string   `xml:"revision>format"`
 	RevisionAuthor    string   `xml:"revision>contributor>username"`
-	RevisionAuthorId  string   `xml:"revision>contributor>id"`
+	RevisionAuthorID  string   `xml:"revision>contributor>id"`
 }
 
 const chanSize int = 1024       // Buffers inbetween all channels
 const readerBufSize int = 50000 // File buffers in front of OS
 
+// LoadWikiCompressed loads a compressed wiki archive, calling `visitor` for each article it reads.
 func LoadWikiCompressed(index io.Reader, source io.ReaderAt, visitor func(*Article) bool) error {
 	ec := NewErrorContext()
 
@@ -54,7 +58,7 @@ func LoadWikiCompressed(index io.Reader, source io.ReaderAt, visitor func(*Artic
 			shouldCont := visitor(a)
 
 			if !shouldCont {
-				ec.Cancel(StoppedErr)
+				ec.Cancel(ErrStopped)
 			}
 		}
 		done.Done()
@@ -104,7 +108,7 @@ func loadIndexChunks(ec *ErrorContext, indexRaw io.Reader) <-chan [2]int64 {
 
 	go func() {
 		// Load the first line, get the first offset
-		var offset int64 = 0
+		var offset int64 // = 0
 
 		for indexScanner.Scan() {
 			line := indexScanner.Text()
@@ -131,6 +135,8 @@ func loadIndexChunks(ec *ErrorContext, indexRaw io.Reader) <-chan [2]int64 {
 	return chunks
 }
 
+// LoadWiki loads articles from an `io.Reader` over wiki archive XML,
+// calling `visitor` for each one and stopping if it returns false.
 func LoadWiki(source io.Reader, visitor func(*Article) bool) error {
 	// Open an XML decoder over the file.
 	decoder := xml.NewDecoder(source)
@@ -156,7 +162,7 @@ func LoadWiki(source io.Reader, visitor func(*Article) bool) error {
 				shouldCont := visitor(&a)
 
 				if !shouldCont {
-					return StoppedErr
+					return ErrStopped
 				}
 			}
 		}
@@ -165,10 +171,11 @@ func LoadWiki(source io.Reader, visitor func(*Article) bool) error {
 	return nil
 }
 
+// LinkRegex extracts links from wikitext.
 // https://regex101.com/r/Q2bNwC/3
 var LinkRegex = regexp.MustCompile(`(?U)\[\[([^]:]+)([#/|].+)?\]\]`)
 
-// Returns a list of strings, representing the titles of articles.
+// ParseLinks Returns a list of strings, representing the titles of articles.
 func ParseLinks(text string) []string {
 	matches := LinkRegex.FindAllStringSubmatchIndex(text, -1)
 	linkNames := make([]string, len(matches))
@@ -180,6 +187,8 @@ func ParseLinks(text string) []string {
 	return linkNames
 }
 
+// ParseIndexLine parses a line of the wiki multistream index,
+// returning (byte offset, article id, article title) tuples.
 func ParseIndexLine(line string) (int64, uint, string, error) {
 	line = strings.TrimSpace(line)
 	parts := strings.SplitN(line, ":", 3)

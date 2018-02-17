@@ -8,6 +8,7 @@ import (
 	. "github.com/wgoodall01/wikipath/wp"
 )
 
+// IndexShowCmd is the CLI command to show a particular article from a `*.wpindex` file.
 var IndexShowCmd = cli.Command{
 	Name:  "index-show",
 	Usage: "Show an article's entry in the index.",

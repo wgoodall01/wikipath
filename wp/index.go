@@ -6,11 +6,15 @@ import (
 	"sync"
 )
 
+// NormalizeArticleTitle normalizes an article title to get a
+// retrieval key
 func NormalizeArticleTitle(title string) string {
 	// Just lowercase it for now -- there are other normalization rules though.
 	return strings.ToLower(title)
 }
 
+// Index contains all the loaded articles.
+// If built, each article has a set of forward/reverse pointers.
 type Index struct {
 	itemIndex    map[string]*IndexItem // Map of normalized article title to `Item`s.
 	itemIndexMut sync.RWMutex
@@ -22,6 +26,9 @@ type Index struct {
 	ready bool // If the index has been built
 }
 
+// IndexItem is an article in the index.
+// If built, it has pointers to articles it links to, and pointers
+// to articles which link to it.
 type IndexItem struct {
 	Title     string     // Non-normalized title of the page.
 	FoundPath *IndexPath // If this item has been visited before.
@@ -33,6 +40,7 @@ type IndexItem struct {
 	ReverseMut sync.Mutex
 }
 
+// NewIndex creates an Index.
 func NewIndex() *Index {
 	return &Index{
 		itemIndex:  make(map[string]*IndexItem),
@@ -41,7 +49,7 @@ func NewIndex() *Index {
 	}
 }
 
-// Get a list of paths between two IndexItems, sorted by length.
+// FindPath gets a list of paths between two IndexItems, sorted by length.
 func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 	// Idiot check
 	if from == to {
@@ -110,20 +118,24 @@ func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 	return nil
 }
 
+// Reset resets the index after a query.
+// It goes through every article and deletes its FoundPath.
 func (ind *Index) Reset() {
 	if ind.dirty && ind.ready {
-		for k, _ := range ind.itemIndex {
-			ind.itemIndex[k].FoundPath = nil
+		for _, item := range ind.itemIndex {
+			item.FoundPath = nil
 		}
 		ind.dirty = false
 	}
 }
 
+// AddArticle adds an article to the index.
+//
+// Index these things:
+// - make an IndexItem, add it to the itemIndex
+// - Parse the links from the article text, add it to the linkIndex
+// - Figure out redirects, add them to the redirectIndex.
 func (ind *Index) AddArticle(a *StrippedArticle) {
-	// Index these things:
-	// - make an IndexItem, add it to the itemIndex
-	// - Parse the links from the article text, add it to the linkIndex
-	// - Figure out redirects, add them to the redirectIndex.
 	k := NormalizeArticleTitle(a.Title)
 
 	if a.Redirect != "" {
@@ -146,6 +158,7 @@ func (ind *Index) AddArticle(a *StrippedArticle) {
 	ind.ready = false
 }
 
+// Build builds the index, finding each article's forward and reverse pointers.
 func (ind *Index) Build() {
 
 	itemPump := func(tempLinks []*StrippedArticle, tempItems chan<- *StrippedArticle) {
@@ -223,12 +236,12 @@ func (ind *Index) Build() {
 	ind.ready = true
 }
 
-// Get status of index as (ready, dirty)
+// Status gets status of index as (ready, dirty)
 func (ind *Index) Status() (ready bool, dirty bool) {
 	return ind.ready, ind.dirty
 }
 
-// Get an IndexItem by article title.
+// Get gets an IndexItem by article title.
 func (ind *Index) Get(title string) *IndexItem {
 	k := NormalizeArticleTitle(title)
 	ind.itemIndexMut.RLock()
