@@ -35,12 +35,9 @@ func TestIndex(t *testing.T) {
 	index := NewIndex()
 
 	t.Run("Status0", func(t *testing.T) {
-		ready, dirty := index.Status()
+		ready := index.Status()
 		if ready != false {
 			t.Fatal("Reports ready before Build() is called")
-		}
-		if dirty != false {
-			t.Fatal("Reports dirty before FindPath() is called")
 		}
 	})
 
@@ -51,12 +48,9 @@ func TestIndex(t *testing.T) {
 	})
 
 	t.Run("Status1", func(t *testing.T) {
-		ready, dirty := index.Status()
+		ready := index.Status()
 		if ready != false {
 			t.Fatal("Reports ready before Build() is called")
-		}
-		if dirty != false {
-			t.Fatal("Reports dirty before FindPath() is called")
 		}
 	})
 
@@ -65,12 +59,9 @@ func TestIndex(t *testing.T) {
 	})
 
 	t.Run("Status2", func(t *testing.T) {
-		ready, dirty := index.Status()
+		ready := index.Status()
 		if ready != true {
 			t.Fatal("Reports not ready after Build() is called")
-		}
-		if dirty != false {
-			t.Fatal("Reports dirty before FindPath() is called")
 		}
 	})
 
@@ -89,12 +80,9 @@ func TestIndex(t *testing.T) {
 	})
 
 	t.Run("Status3", func(t *testing.T) {
-		ready, dirty := index.Status()
+		ready := index.Status()
 		if ready != true {
 			t.Fatal("Reports Not ready after Build() is called")
-		}
-		if dirty != true {
-			t.Fatal("Reports not dirty after pathfind")
 		}
 	})
 

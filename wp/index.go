@@ -22,7 +22,6 @@ type Index struct {
 	tempLinks  []*StrippedArticle // [empty if ready] Articles to be indexed.
 	tempRedirs []*StrippedArticle // [empty if ready] Redirects to be indexed.
 
-	dirty bool // If the items have been modified
 	ready bool // If the index has been built
 }
 
@@ -30,8 +29,7 @@ type Index struct {
 // If built, it has pointers to articles it links to, and pointers
 // to articles which link to it.
 type IndexItem struct {
-	Title     string     // Non-normalized title of the page.
-	FoundPath *IndexPath // If this item has been visited before.
+	Title string // Non-normalized title of the page.
 
 	Forward    []*IndexItem // Items this pages links to.
 	ForwardMut sync.Mutex
@@ -56,13 +54,6 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath
 		return NewIndexPath(from, FORWARD)
 	}
 
-	// Ensure index is clean.
-	if ind.dirty {
-		ind.Reset()
-	} else {
-		ind.dirty = true
-	}
-
 	// Ensure index has been built.
 	if !ind.ready {
 		ind.Build()
@@ -75,6 +66,10 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath
 }
 
 func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
+	// Set up dict of already-visited item paths.
+	found := make(map[*IndexItem]*IndexPath)
+
+	// Set up Djikstra queue
 	queue := NewPathQueue()
 
 	fromPath := NewIndexPath(from, FORWARD)
@@ -82,7 +77,6 @@ func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 	queue.Enqueue(toPath)
 
 	path := fromPath
-
 	for ; path != nil; path = queue.Dequeue() {
 
 		// Get the right link list depending on direction
@@ -95,38 +89,31 @@ func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 
 		for _, link := range links {
 			linkPath := path.Append(link)
+			foundPath := found[link]
 
 			if (linkPath.Direction == FORWARD && link == to) || (linkPath.Direction == REVERSE && link == from) {
 				// Found the end of the path.
 				return linkPath
-			} else if link.FoundPath == nil {
+			} else if foundPath == nil {
 				// Not searched yet. Add this to the queue of pages to be searched.
-				link.FoundPath = linkPath
+				found[link] = linkPath
 				queue.Enqueue(linkPath)
-			} else if link.FoundPath.Direction == linkPath.Direction {
+			} else if foundPath.Direction == linkPath.Direction {
 				// Already searched in the same direction.
-				// Ignore it.
+				// If our way is shorter, set the path to our way.
+				if linkPath.Len() < foundPath.Len() {
+					foundPath.Prev = linkPath.Prev
+				}
 			} else {
 				// At this point, link.FoundPath.Direction != linkPath.Direction
 				// We've met the search coming from the other direction.
-				return NewIndexPathByJoin(linkPath, link.FoundPath)
+				return NewIndexPathByJoin(linkPath, foundPath)
 			}
 		}
 	}
 
 	// Nothing happened.
 	return nil
-}
-
-// Reset resets the index after a query.
-// It goes through every article and deletes its FoundPath.
-func (ind *Index) Reset() {
-	if ind.dirty && ind.ready {
-		for _, item := range ind.itemIndex {
-			item.FoundPath = nil
-		}
-		ind.dirty = false
-	}
 }
 
 // AddArticle adds an article to the index.
@@ -237,8 +224,8 @@ func (ind *Index) Build() {
 }
 
 // Status gets status of index as (ready, dirty)
-func (ind *Index) Status() (ready bool, dirty bool) {
-	return ind.ready, ind.dirty
+func (ind *Index) Status() bool {
+	return ind.ready
 }
 
 // Get gets an IndexItem by article title.

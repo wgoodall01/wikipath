@@ -128,7 +128,6 @@ var StartCmd = cli.Command{
 			}
 
 			fmt.Println()
-			ind.Reset()
 		}
 
 		return nil
