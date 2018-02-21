@@ -80,6 +80,16 @@ func (path *IndexPath) ToSlice() []*IndexItem {
 	return pathArr
 }
 
+// ToStringSlice returns the IndexPath as a []string.
+func (path *IndexPath) ToStringSlice() []string {
+	items := path.ToSlice()
+	strings := make([]string, len(items))
+	for i, it := range items {
+		strings[i] = it.Title
+	}
+	return strings
+}
+
 func (path *IndexPath) Len() int {
 	n := 1
 	itm := path

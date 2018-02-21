@@ -171,13 +171,13 @@ func LoadWiki(source io.Reader, visitor func(*Article) bool) error {
 	return nil
 }
 
-// LinkRegex extracts links from wikitext.
+// linkRegex extracts links from wikitext.
 // https://regex101.com/r/Q2bNwC/3
-var LinkRegex = regexp.MustCompile(`(?U)\[\[([^]:]+)([#/|].+)?\]\]`)
+var linkRegex = regexp.MustCompile(`(?U)\[\[([^]:]+)([#/|].+)?\]\]`)
 
 // ParseLinks Returns a list of strings, representing the titles of articles.
 func ParseLinks(text string) []string {
-	matches := LinkRegex.FindAllStringSubmatchIndex(text, -1)
+	matches := linkRegex.FindAllStringSubmatchIndex(text, -1)
 	linkNames := make([]string, len(matches))
 	for i, inds := range matches {
 		start := inds[2]

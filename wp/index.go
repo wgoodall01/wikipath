@@ -1,6 +1,7 @@
 package wikipath
 
 import (
+	"math/rand"
 	"runtime"
 	"strings"
 	"sync"
@@ -234,4 +235,23 @@ func (ind *Index) Get(title string) *IndexItem {
 	ind.itemIndexMut.RLock()
 	defer ind.itemIndexMut.RUnlock()
 	return ind.itemIndex[k]
+}
+
+// GetRandom returns a random item from the index.
+func (ind *Index) GetRandom() *IndexItem {
+	ind.itemIndexMut.RLock()
+	defer ind.itemIndexMut.RUnlock()
+
+	total := len(ind.itemIndex)
+	n := rand.Intn(total)
+	i := 0
+	for _, item := range ind.itemIndex {
+		if i >= n {
+			return item
+		} else {
+			i++
+		}
+	}
+
+	return nil // should never happen
 }
