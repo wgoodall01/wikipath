@@ -117,9 +117,9 @@ var StartCmd = cli.Command{
 			tSearch := time.Now()
 			fmt.Printf("\nSearching for path... ")
 			nSteps := 10
-			path := ind.FindPath(items[0], items[1], nSteps)
+			path, touched := ind.FindPath(items[0], items[1], nSteps)
 			dSearch := time.Since(tSearch).Seconds()
-			fmt.Printf("[done in %4.2fs]\n", dSearch)
+			fmt.Printf("[searched %d articles in %4.2fs]\n", touched, dSearch)
 
 			if path == nil {
 				fmt.Printf("No paths found in %d steps.", nSteps)

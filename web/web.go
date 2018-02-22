@@ -25,6 +25,7 @@ type PathResponse struct {
 	To       string   `json:"to"`       // Ending article
 	Path     []string `json:"path"`     // Path between articles.
 	Duration float64  `json:"duration"` // Duration of query.
+	Touched  int      `json:"touched"`  // How many articles touched.
 }
 
 type HttpError struct {
@@ -122,7 +123,7 @@ func main() {
 
 		// Find path.
 		tStart := time.Now()
-		path := idx.FindPath(fromItem, toItem, MAX_DEPTH)
+		path, touched := idx.FindPath(fromItem, toItem, MAX_DEPTH)
 		duration := time.Since(tStart)
 
 		if path == nil {
@@ -136,6 +137,7 @@ func main() {
 			To:       toName,
 			Path:     titles,
 			Duration: duration.Seconds(),
+			Touched:  touched,
 		}
 
 		respBytes, respErr := json.MarshalIndent(resp, "", "  ")

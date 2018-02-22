@@ -49,10 +49,11 @@ func NewIndex() *Index {
 }
 
 // FindPath gets a list of paths between two IndexItems, sorted by length.
-func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath {
+// Returns (path found, items touched).
+func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) (path *IndexPath, searched int) {
 	// Idiot check
 	if from == to {
-		return NewIndexPath(from, FORWARD)
+		return NewIndexPath(from, FORWARD), 0
 	}
 
 	// Ensure index has been built.
@@ -61,14 +62,17 @@ func (ind *Index) FindPath(from *IndexItem, to *IndexItem, depth int) *IndexPath
 	}
 
 	// Run the search.
-	path := pathSearch(from, to, depth)
+	path, searched = pathSearch(from, to, depth)
 
-	return path
+	return path, searched
 }
 
-func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
+func pathSearch(from *IndexItem, to *IndexItem, depth int) (path *IndexPath, searched int) {
 	// Set up dict of already-visited item paths.
 	found := make(map[*IndexItem]*IndexPath)
+
+	// Count searched
+	// searched = 0 at definition.
 
 	// Set up Djikstra queue
 	queue := NewPathQueue()
@@ -77,8 +81,10 @@ func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 	toPath := NewIndexPath(to, REVERSE)
 	queue.Enqueue(toPath)
 
-	path := fromPath
+	path = fromPath
+
 	for ; path != nil; path = queue.Dequeue() {
+		searched++
 
 		// Get the right link list depending on direction
 		var links []*IndexItem
@@ -94,7 +100,7 @@ func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 
 			if (linkPath.Direction == FORWARD && link == to) || (linkPath.Direction == REVERSE && link == from) {
 				// Found the end of the path.
-				return linkPath
+				return linkPath, searched
 			} else if foundPath == nil {
 				// Not searched yet. Add this to the queue of pages to be searched.
 				found[link] = linkPath
@@ -108,13 +114,13 @@ func pathSearch(from *IndexItem, to *IndexItem, depth int) *IndexPath {
 			} else {
 				// At this point, link.FoundPath.Direction != linkPath.Direction
 				// We've met the search coming from the other direction.
-				return NewIndexPathByJoin(linkPath, foundPath)
+				return NewIndexPathByJoin(linkPath, foundPath), searched
 			}
 		}
 	}
 
 	// Nothing happened.
-	return nil
+	return nil, searched
 }
 
 // AddArticle adds an article to the index.

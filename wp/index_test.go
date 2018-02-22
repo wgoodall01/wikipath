@@ -72,7 +72,8 @@ func TestIndex(t *testing.T) {
 
 	t.Run("PathFind1", func(t *testing.T) {
 		t.Log("Find path from A through D")
-		path := index.FindPath(index.Get("A"), index.Get("D"), 20)
+		path, touched := index.FindPath(index.Get("A"), index.Get("D"), 20)
+		t.Logf("Touched %d", touched)
 		t.Log(path)
 		if path == nil {
 			t.Fatal("Did not find path")
@@ -88,7 +89,8 @@ func TestIndex(t *testing.T) {
 
 	t.Run("PathFind2", func(t *testing.T) {
 		t.Log("Find path from B through D")
-		path := index.FindPath(index.Get("B"), index.Get("D"), 20)
+		path, touched := index.FindPath(index.Get("B"), index.Get("D"), 20)
+		t.Logf("Touched %d", touched)
 		t.Log(path)
 		if path == nil {
 			t.Fatal("Did not find path")
