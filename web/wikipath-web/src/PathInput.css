@@ -5,16 +5,21 @@
   border: none;
   border-bottom: 1px solid rgba(0, 0, 0, 0.3);
   margin-bottom: 20px;
-  padding: 10px;
   width: 100%;
+}
+
+.PathInput_input:focus {
+  outline: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.6);
 }
 
 .PathInput_btn {
   display: block;
   margin-left: auto;
-  background-color: #32ff7e;
+  background-color: #0984e3;
+  color: white;
+  cursor: pointer;
   border: none;
-  color: black;
   font-size: 16px;
   width: 200px;
   border-radius: 100px;
@@ -28,7 +33,14 @@
 }
 
 .PathInput_label span {
-  padding: 10px 0;
-  width: 60px;
+  width: 70px;
+  margin-right: 10px;
   text-align: right;
+}
+
+.PathInput_random {
+  padding: 0 5px;
+  border: none;
+  margin: 0;
+  height: 20px;
 }
