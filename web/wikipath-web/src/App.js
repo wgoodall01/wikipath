@@ -1,4 +1,5 @@
 import React from 'react';
+import PathInput from './PathInput.js';
 import './App.css';
 
 class App extends React.Component {
@@ -8,8 +9,10 @@ class App extends React.Component {
       status: 'READY', // one of "READY" "PROCESSING"
       from: '',
       to: '',
-      duration: null,
-      path: [],
+      result: null,
+      //duration: null,
+      //touched: null,
+      //path: [],
       err: null
     };
   }
@@ -26,22 +29,26 @@ class App extends React.Component {
         status: 'READY',
         from: rj.from,
         to: rj.to,
-        path: rj.path,
-        duration: rj.duration,
+        result: {
+          path: rj.path,
+          duration: rj.duration,
+          touched: rj.touched
+        },
         err: null
       });
     } else {
       // There's an error.
-      this.setState({status: 'READY', path: null, duration: null, err: rj});
+      this.setState({status: 'READY', result: null, err: rj});
     }
   }
 
-  onChange(e) {
-    this.setState({[e.target.name]: e.target.value});
+  setVal(name, val) {
+    this.setState({[name]: val});
   }
 
   render() {
-    const {to, from, path, duration, status, err} = this.state;
+    const {to, from, result, status, err} = this.state;
+    const {path, duration, touched} = result || {};
 
     let body;
     if (status === 'PROCESSING') {
@@ -49,23 +56,12 @@ class App extends React.Component {
     } else {
       body = (
         <React.Fragment>
-          <input
-            className="App_input"
-            type="text"
-            name="from"
-            onChange={this.onChange.bind(this)}
-            value={from}
-            placeholder="From"
+          <PathInput
+            from={from}
+            to={to}
+            setVal={this.setVal.bind(this)}
+            onSubmit={this.onSubmit.bind(this)}
           />
-          <input
-            className="App_input"
-            type="text"
-            name="to"
-            onChange={this.onChange.bind(this)}
-            value={to}
-            placeholder="To"
-          />
-          <button onClick={this.onSubmit.bind(this)}>Go!</button>
           {err && (
             <div className="App_error">
               <h2>Error</h2>
@@ -74,6 +70,7 @@ class App extends React.Component {
           )}
           {path && <ol className="App_path">{path.map(e => <li key={e}>{e}</li>)}</ol>}
           {duration && <div className="App_duration">Done in {duration} seconds.</div>}
+          {touched && <div className="App_touched">Touched {touched} articles.</div>}
         </React.Fragment>
       );
     }
