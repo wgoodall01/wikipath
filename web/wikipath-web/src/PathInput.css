@@ -1,16 +1,40 @@
+.PathInput_fieldset {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-right: -10px;
+  margin-bottom: 10px;
+}
+
+.PathInput_field {
+  flex: 1;
+  margin-right: 10px;
+}
+
+.PathInput_field label {
+  color: #333;
+}
+
 .PathInput_input {
-  font-size: inherit;
-  line-height: inherit;
-  display: block;
-  border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
-  margin-bottom: 20px;
+  margin-top: 5px;
+  font-size: 20px;
   width: 100%;
+  border: none;
+  border-bottom: 1px solid grey;
 }
 
 .PathInput_input:focus {
   outline: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.6);
+  border-bottom: 2px solid black;
+}
+
+.PathInput_random {
+  color: grey;
+  padding: none;
+  background: none;
+  float: right;
+  cursor: pointer;
+  border: none;
 }
 
 .PathInput_btn {
@@ -24,23 +48,4 @@
   width: 200px;
   border-radius: 100px;
   padding: 10px;
-}
-
-.PathInput_label {
-  font-size: 20px;
-  display: flex;
-  flex-direction: row;
-}
-
-.PathInput_label span {
-  width: 70px;
-  margin-right: 10px;
-  text-align: right;
-}
-
-.PathInput_random {
-  padding: 0 5px;
-  border: none;
-  margin: 0;
-  height: 20px;
 }

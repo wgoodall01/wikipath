@@ -1,5 +1,6 @@
 import React from 'react';
 import PathInput from './PathInput.js';
+import PathDisplay from './PathDisplay.js';
 import './App.css';
 
 class App extends React.Component {
@@ -68,9 +69,13 @@ class App extends React.Component {
               <p>{err.message}</p>
             </div>
           )}
-          {path && <ol className="App_path">{path.map(e => <li key={e}>{e}</li>)}</ol>}
-          {duration && <div className="App_duration">Done in {duration} seconds.</div>}
-          {touched && <div className="App_touched">Touched {touched} articles.</div>}
+          {path && <PathDisplay path={path} />}
+          {duration &&
+            touched && (
+              <div className="App_status">
+                Searched {touched} articles in {duration} seconds
+              </div>
+            )}
         </React.Fragment>
       );
     }
