@@ -21,9 +21,9 @@ class App extends React.Component {
   async onSubmit() {
     const {from, to} = this.state;
     const url = `/api/query?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    this.setState({status: 'PROCESSING'});
     const resp = await fetch(url);
     const rj = await resp.json();
-    this.setState({status: 'PROCESSING'});
     if (resp.ok) {
       // No error
       this.setState({
@@ -51,39 +51,29 @@ class App extends React.Component {
     const {to, from, result, status, err} = this.state;
     const {path, duration, touched} = result || {};
 
-    let body;
-    if (status === 'PROCESSING') {
-      body = <h2>Processing...</h2>;
-    } else {
-      body = (
-        <React.Fragment>
-          <PathInput
-            from={from}
-            to={to}
-            setVal={this.setVal.bind(this)}
-            onSubmit={this.onSubmit.bind(this)}
-          />
-          {err && (
-            <div className="App_error">
-              <h2>Error</h2>
-              <p>{err.message}</p>
-            </div>
-          )}
-          {path && <PathDisplay path={path} />}
-          {duration &&
-            touched && (
-              <div className="App_status">
-                Searched {touched} articles in {duration} seconds
-              </div>
-            )}
-        </React.Fragment>
-      );
-    }
-
     return (
       <div className="App">
         <h1>Wikipath</h1>
-        {body}
+        <PathInput
+          from={from}
+          to={to}
+          setVal={this.setVal.bind(this)}
+          onSubmit={this.onSubmit.bind(this)}
+        />
+        {status == 'PROCESSING' && <h2>Processing...</h2>}
+        {err && (
+          <div className="App_error">
+            <h2>Error</h2>
+            <p>{err.message}</p>
+          </div>
+        )}
+        {path && <PathDisplay path={path} />}
+        {duration &&
+          touched && (
+            <div className="App_status">
+              Searched {touched} articles in {duration} seconds
+            </div>
+          )}
       </div>
     );
   }
