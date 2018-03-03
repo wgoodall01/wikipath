@@ -2,13 +2,16 @@
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
+  margin-top: -10px;
   margin-right: -10px;
   margin-bottom: 10px;
 }
 
 .PathInput_field {
   flex: 1;
+  flex-basis: 250px;
   margin-right: 10px;
+  margin-top: 10px;
 }
 
 .PathInput_field label {
@@ -17,19 +20,21 @@
 
 .PathInput_input {
   margin-top: 5px;
+  margin-bottom: 1px;
   font-size: 20px;
   width: 100%;
-  border: none;
-  border-bottom: 1px solid grey;
+  border: 1px solid #aaa;
+  padding: 8px;
+  border-radius: 4px;
 }
 
 .PathInput_input:focus {
   outline: none;
-  border-bottom: 2px solid black;
+  border: 1px solid var(--color-dark);
 }
 
 .PathInput_random {
-  color: grey;
+  color: var(--color-light);
   padding: none;
   background: none;
   float: right;
@@ -40,7 +45,7 @@
 .PathInput_btn {
   display: block;
   margin-left: auto;
-  background-color: #0984e3;
+  background-color: var(--color-primary);
   color: white;
   cursor: pointer;
   border: none;
@@ -48,4 +53,10 @@
   width: 200px;
   border-radius: 100px;
   padding: 10px;
+  border: 2px solid transparent;
+}
+
+.PathInput_btn:focus {
+  border: 2px solid var(--color-primary-light);
+  outline: none;
 }

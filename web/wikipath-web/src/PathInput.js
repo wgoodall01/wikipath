@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import './PathInput.css';
 
 const submitHandler = onSubmit => e => {
@@ -6,13 +7,13 @@ const submitHandler = onSubmit => e => {
   onSubmit();
 };
 
-const randomize = (setVal, name) => async e => {
+const randomize = (setVal, name) => async () => {
   const resp = await fetch('/api/random');
   if (resp.ok) {
     const rj = await resp.json();
     setVal(name, rj.title);
   } else {
-    alert("Couldn't find random article.");
+    setVal(name, '[not found]');
   }
 };
 
@@ -39,6 +40,13 @@ const PathField = ({label, name, setVal, val}) => (
   </div>
 );
 
+PathField.propTypes = {
+  setVal: PropTypes.func.isRequired,
+  name: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  val: PropTypes.string.isRequired
+};
+
 const PathInput = ({setVal, from, to, onSubmit}) => (
   <form onSubmit={submitHandler(onSubmit)}>
     <div className="PathInput_fieldset">
@@ -50,5 +58,12 @@ const PathInput = ({setVal, from, to, onSubmit}) => (
     </button>
   </form>
 );
+
+PathInput.propTypes = {
+  setVal: PropTypes.func.isRequired,
+  onSubmit: PropTypes.func.isRequired,
+  from: PropTypes.string.isRequired,
+  to: PropTypes.string.isRequired
+};
 
 export default PathInput;

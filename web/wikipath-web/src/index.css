@@ -8,3 +8,11 @@ body {
 * {
   box-sizing: inherit;
 }
+
+:root {
+  --color-primary: #0984e3;
+  --color-primary-light: lightblue;
+  --color-error: red;
+  --color-light: grey;
+  --color-dark: black;
+}

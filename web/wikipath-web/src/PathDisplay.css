@@ -1,8 +1,33 @@
 .PathDisplay {
-  margin: -5px 0;
+  margin: 20px 0;
+  list-style: none;
+  list-style-position: inside;
+  padding: 0;
+
+  counter-reset: PathDisply_items;
+}
+
+.PathDisplay_item:before {
+  content: counter(PathDisply_items);
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  line-height: inherit;
+  color: white;
+  background-color: var(--color-primary);
+  opacity: 0.8;
+  border-radius: 100%;
+  padding: 8px;
+  text-align: center;
+}
+
+.PathDisplay_item > * {
+  padding: 8px;
 }
 
 .PathDisplay_item {
+  line-height: 10px;
+  counter-increment: PathDisply_items;
   margin: 8px 0;
   border-radius: 5px;
 }

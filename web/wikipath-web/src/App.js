@@ -7,15 +7,15 @@ class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      status: 'READY', // one of "READY" "PROCESSING"
+      status: 'READY', // one of "READY", "PROCESSING"
       from: '',
       to: '',
       result: null,
-      //duration: null,
-      //touched: null,
-      //path: [],
       err: null
     };
+
+    this.setVal = this.setVal.bind(this);
+    this.onSubmit = this.onSubmit.bind(this);
   }
 
   async onSubmit() {
@@ -51,29 +51,34 @@ class App extends React.Component {
     const {to, from, result, status, err} = this.state;
     const {path, duration, touched} = result || {};
 
+    let body = null;
+    if (status === 'PROCESSING') {
+      body = <h2 className="App_processing">Processing...</h2>;
+    } else if (status === 'READY') {
+      body = (
+        <React.Fragment>
+          {err && (
+            <div className="App_error">
+              <h2>Error</h2>
+              <p>{err.message}</p>
+            </div>
+          )}
+          {path && <PathDisplay path={path} />}
+          {duration &&
+            touched && (
+              <div className="App_status">
+                Searched {touched} articles in {duration} seconds
+              </div>
+            )}
+        </React.Fragment>
+      );
+    }
+
     return (
       <div className="App">
         <h1>Wikipath</h1>
-        <PathInput
-          from={from}
-          to={to}
-          setVal={this.setVal.bind(this)}
-          onSubmit={this.onSubmit.bind(this)}
-        />
-        {status == 'PROCESSING' && <h2>Processing...</h2>}
-        {err && (
-          <div className="App_error">
-            <h2>Error</h2>
-            <p>{err.message}</p>
-          </div>
-        )}
-        {path && <PathDisplay path={path} />}
-        {duration &&
-          touched && (
-            <div className="App_status">
-              Searched {touched} articles in {duration} seconds
-            </div>
-          )}
+        <PathInput from={from} to={to} setVal={this.setVal} onSubmit={this.onSubmit} />
+        {body}
       </div>
     );
   }

@@ -2,8 +2,34 @@
   max-width: 600px;
   margin: 0 auto;
   margin-top: 50px;
+  padding: 0 20px;
+}
+
+@media screen and (min-width: 600px) {
+  .App {
+    padding-top: 30px !important;
+  }
 }
 
 .App_status {
   color: grey;
+}
+
+.App_processing {
+  text-align: center;
+  color: grey;
+  text-style: italic;
+}
+
+.App_error {
+  margin-top: 20px;
+  background-color: var(--color-error);
+  background: linear-gradient(0.05turn, var(--color-error), transparent 170%);
+  color: white;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.App_error * {
+  margin: 0;
 }
