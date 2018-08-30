@@ -70,7 +70,7 @@ var IndexCmd = cli.Command{
 		})
 
 		if loadErr != nil {
-			return NewInternalError("failed to parse wiki archive", 10)
+			return NewInternalError("failed to parse wiki archive")
 		}
 
 		close(articles)

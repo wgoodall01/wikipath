@@ -167,8 +167,6 @@ func LoadWiki(source io.Reader, visitor func(*Article) bool) error {
 			}
 		}
 	}
-
-	return nil
 }
 
 // linkRegex extracts links from wikitext.
