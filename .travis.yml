@@ -1,8 +1,6 @@
 language: go
 
 go:
-- "1.9"
-- "1.10"
 - "1.11"
 - master
 
@@ -11,8 +9,10 @@ matrix:
   - go: master
   fast_finish: true
 
+install:
+  - true
+
 script: 
-  - pwd
   - ./test.sh
 
 after_success:
