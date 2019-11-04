@@ -1,7 +1,7 @@
 package main
 
 // Generate the static bundle.
-//go:generate statik -src=./wikipath-web/build/
+//go:generate go run github.com/rakyll/statik -src=./wikipath-web/build/
 
 import (
 	"log"
